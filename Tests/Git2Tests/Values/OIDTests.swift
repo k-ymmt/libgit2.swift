@@ -65,5 +65,38 @@ extension RuntimeSensitiveTests {
                 _ = try OID(hex: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
             }
         }
+
+        @Test
+        func oidRejectsShorterThan40Hex() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            // 39 valid hex chars must still throw after the fromstrn migration.
+            #expect(throws: GitError.self) {
+                _ = try OID(hex: "0123456789abcdef0123456789abcdef0123456")
+            }
+        }
+
+        @Test
+        func oidRejectsLongerThan40Hex() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            // 41 chars — above the SHA-1 hex width.
+            #expect(throws: GitError.self) {
+                _ = try OID(hex: "0123456789abcdef0123456789abcdef0123456789")
+            }
+        }
+
+        @Test
+        func oidZeroIsAllZeroBytes() {
+            let zero = OID.zero
+            #expect(zero.hex == String(repeating: "0", count: 40))
+        }
+
+        @Test
+        func oidZeroEqualsItself() {
+            #expect(OID.zero == OID.zero)
+        }
     }
 }
