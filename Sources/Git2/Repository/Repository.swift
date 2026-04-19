@@ -46,4 +46,12 @@ public final class Repository: @unchecked Sendable {
     public var isHeadUnborn: Bool {
         lock.withLock { git_repository_head_unborn(handle) != 0 }
     }
+
+    public func head() throws(GitError) -> Reference {
+        try lock.withLock { () throws(GitError) -> Reference in
+            var raw: OpaquePointer?
+            try check(git_repository_head(&raw, handle))
+            return Reference(handle: raw!, repository: self)
+        }
+    }
 }
