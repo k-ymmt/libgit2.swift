@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "libgit2.swift",
+    name: "Git2",
     platforms: [
         .macOS(.v13),
-        .iOS(.v15),
+        .iOS(.v16),
     ],
     products: [
         .library(
-            name: "libgit2.swift",
-            targets: ["libgit2.swift"]
+            name: "Git2",
+            targets: ["Git2"]
         ),
     ],
     targets: [
@@ -20,7 +20,7 @@ let package = Package(
             checksum: "31f84a90e9fa8887b4e45280d01a1ca06b8c2134293dbaf30b627ec2094db46b"
         ),
         .target(
-            name: "libgit2.swift",
+            name: "Git2",
             dependencies: ["Cgit2"],
             linkerSettings: [
                 .linkedFramework("Security"),
@@ -31,8 +31,8 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "libgit2.swiftTests",
-            dependencies: ["libgit2.swift"]
+            name: "Git2Tests",
+            dependencies: ["Git2"]
         ),
     ]
 )
