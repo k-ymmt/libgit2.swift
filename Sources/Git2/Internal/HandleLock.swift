@@ -7,23 +7,19 @@ internal struct HandleLock: Sendable {
         self.backing = OSAllocatedUnfairLock()
     }
 
-    @inline(__always)
     func withLock<T, E: Error>(_ body: () throws(E) -> T) throws(E) -> T {
-        var result: Result<T, E>!
-        backing.withLockUnchecked {
+        // `OSAllocatedUnfairLock.withLock` requires `@Sendable` body and `rethrows`,
+        // which can't forward typed throws. We route through `withLockUnchecked`
+        // and carry the outcome across the lock boundary as a `Result<T, E>`.
+        let result: Result<T, E> = backing.withLockUnchecked {
             do {
-                result = .success(try body())
+                return .success(try body())
             } catch let error as E {
-                result = .failure(error)
+                return .failure(error)
             } catch {
                 fatalError("unreachable: typed throws guarantees E")
             }
         }
-        switch result! {
-        case .success(let value):
-            return value
-        case .failure(let error):
-            throw error
-        }
+        return try result.get()
     }
 }
