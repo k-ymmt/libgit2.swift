@@ -10,7 +10,7 @@ extension GitError.Code {
         case GIT_EAMBIGUOUS.rawValue:     return .ambiguous
         case GIT_EBUFS.rawValue:          return .bufferTooShort
         case GIT_EUSER.rawValue:          return .user
-        case GIT_EBAREREPO.rawValue:      return .barelyRepo
+        case GIT_EBAREREPO.rawValue:      return .bareRepo
         case GIT_EUNBORNBRANCH.rawValue:  return .unbornBranch
         case GIT_EUNMERGED.rawValue:      return .unmerged
         case GIT_ENONFASTFORWARD.rawValue: return .nonFastForward

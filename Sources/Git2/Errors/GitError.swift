@@ -20,7 +20,7 @@ public struct GitError: Error, Sendable, Equatable, CustomStringConvertible {
         case ambiguous
         case bufferTooShort
         case user
-        case barelyRepo
+        case bareRepo
         case unbornBranch
         case unmerged
         case nonFastForward

@@ -29,3 +29,12 @@ Items deferred from the v0.1.0 XCFramework implementation.
 2. **Swift wrapper layer, first slice** — e.g. `Repository.open(path:)` → `Repository.head()` → an iterator over commits. Probably ships as v0.2.0.
 3. **GitHub Actions** — tag-push → build on a macOS runner → create release → attach zip. Removes the human from the release loop.
 4. **SSH support** — only if a concrete use case appears.
+
+## Deferred from v0.2.0 (Swift wrapper first slice)
+
+- [ ] **Public API doc comments.** Every public type in `Git2` (`Git`, `Repository`, `Reference`, `Commit`, `OID`, `Signature`, `Version`, `GitError`, `CommitSequence`, `CommitIterator`) needs `///` doc comments. Copy the relevant prose from the design spec §8 as a starting point. Blocker for a polished v0.2.0 release.
+- [ ] **`git_oid_fromstr` is deprecated in libgit2 1.x.** Currently used by `OID(hex:)`. Migrate to `git_oid_fromstrn` (or `git_oid_fromstrp` for prefix form) before libgit2 2.x removes it.
+- [ ] **`RevWalkHandle.init` swallows errors silently.** If `git_revwalk_new` or `git_revwalk_push` fails, `nextCommit()` returns `nil` forever with no diagnostic. `Repository.log(from: Commit)` is safe because `Commit` validity is already established, but a future `log(fromOID: OID)` overload would need to surface init failures. Plan to resolve this when the public `RevWalk` type lands in v0.3.
+- [ ] **Defensive force-unwraps need libgit2 contract comments.** Several force-unwraps in `Commit`, `Reference`, and `Repository` (e.g. `git_commit_id(handle)!`, `git_reference_name(handle)!`) rely on implicit libgit2 contracts. Add a one-line comment at each site explaining the non-NULL guarantee.
+- [ ] **ThreadSanitizer in CI.** Spec §9.4 lists this as an unaddressed test-coverage gap. Worth wiring once GitHub Actions is set up (see #3 above).
+- [ ] **CHANGELOG.md** for v0.1.0 → v0.2.0, covering the module rename, iOS bump, and new API surface.

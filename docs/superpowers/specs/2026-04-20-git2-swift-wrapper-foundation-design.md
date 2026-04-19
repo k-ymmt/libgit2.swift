@@ -219,7 +219,7 @@ public final class Commit: @unchecked Sendable {
 
 ### 5.3 Concurrency & `Sendable`
 
-- libgit2 must be built with `GIT_OPT_ENABLE_THREADS = 1`. `Git.bootstrap()` sets this unconditionally.
+- libgit2 must be built with `USE_THREADS=ON` (compile-time). The runtime opt `GIT_OPT_ENABLE_THREADS` was removed in libgit2 1.x; threading is now a compile-time concern. The bundled `Cgit2` XCFramework is built with threading enabled.
 - Individual handles are not thread-safe. The wrapper serializes all access per `Repository`.
 - **One `OSAllocatedUnfairLock<Void>` per `Repository`.** All libgit2 calls involving that repository — including calls through its children — take the repository's lock.
 - Handle classes (`Repository`, `Reference`, `Commit`) are `@unchecked Sendable`; correctness is established by the locking rules below, not by the compiler.
@@ -260,7 +260,6 @@ Bootstrap is **explicit**. Forgetting to call `Git.bootstrap()` is a programmer 
 ```swift
 public enum Git {
     /// Initializes libgit2. Safe to call multiple times (reference-counted).
-    /// Also enables libgit2 threading (`GIT_OPT_ENABLE_THREADS = 1`).
     public static func bootstrap() throws(GitError)
 
     /// Releases one bootstrap reference. The final matching call fully shuts libgit2 down.
@@ -285,7 +284,6 @@ internal final class GitRuntime: @unchecked Sendable {
         try lock.withLock { (state: inout Int) throws(GitError) in
             if state == 0 {
                 try check(git_libgit2_init())
-                try check(git_libgit2_opts(GIT_OPT_ENABLE_THREADS, Int32(1)))
             }
             state += 1
         }
@@ -294,7 +292,10 @@ internal final class GitRuntime: @unchecked Sendable {
     func shutdown() throws(GitError) {
         try lock.withLock { (state: inout Int) throws(GitError) in
             guard state > 0 else { return }
-            try check(git_libgit2_shutdown())
+            // libgit2 refcounts internally; only shutdown on the final release.
+            if state == 1 {
+                try check(git_libgit2_shutdown())
+            }
             state -= 1
         }
     }
@@ -637,7 +638,7 @@ func withTemporaryDirectory<T>(_ body: (URL) throws -> T) rethrows -> T
 | Package / product / target renamed `libgit2.swift` → `Git2` | Update `import libgit2_swift` → `import Git2` and `.product(name: "libgit2.swift", ...)` → `.product(name: "Git2", ...)`. Repository URL (`.package(url: "...libgit2.swift.git", ...)`) is unchanged. |
 | iOS minimum 15 → 16 | Update `.iOS(.v15)` → `.iOS(.v16)` in downstream `Package.swift`. |
 | `@_exported import Cgit2` | Still transitively available via `import Git2`. Direct `.product(name: "Cgit2", ...)` consumers are unaffected. |
-| `git_libgit2_init` / `shutdown` calls | Replace with `Git.bootstrap()` / `Git.shutdown()`. Mixing is technically safe (libgit2 reference-counts internally) but the `Git` API also ensures `GIT_OPT_ENABLE_THREADS = 1`. |
+| `git_libgit2_init` / `shutdown` calls | Replace with `Git.bootstrap()` / `Git.shutdown()`. Mixing is technically safe (libgit2 reference-counts internally) but using the `Git` API is preferred. |
 
 v0.x is treated as unstable per the SemVer `0.x` convention. Regular SemVer guarantees begin at v1.0.
 
