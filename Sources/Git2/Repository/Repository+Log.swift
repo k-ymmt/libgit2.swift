@@ -1,9 +1,9 @@
+import Cgit2
+
 extension Repository {
     /// Returns a sequence of commits reachable from `start`, walking toward ancestors.
     ///
-    /// Iteration uses libgit2's default sort order (insertion order from the push
-    /// point). More control — topological sorting, reversing, hiding branches —
-    /// will ship in v0.3 via a dedicated `RevWalk` type.
+    /// Uses libgit2's default (insertion) order.
     ///
     /// ```swift
     /// let tip = try repo.head().resolveToCommit()
@@ -13,13 +13,19 @@ extension Repository {
     /// ```
     ///
     /// The returned sequence can be iterated multiple times; each iteration
-    /// creates a fresh libgit2 revwalk.
-    ///
-    /// - Parameter start: The commit to start walking from. Ancestors of this
-    ///   commit are emitted; `start` itself is the first element.
-    /// - Returns: A ``CommitSequence`` that lazily yields commits.
+    /// creates a fresh walker.
     public func log(from start: Commit) -> CommitSequence {
-        CommitSequence(repository: self, startOID: start.oid)
+        CommitSequence(repository: self, startOID: start.oid, sorting: .none)
+    }
+
+    /// Returns a sequence of commits reachable from `start`, applying the
+    /// given sort order.
+    ///
+    /// - Parameters:
+    ///   - start: The commit to start walking from.
+    ///   - sorting: Sort flags. `.none` matches ``log(from:)``.
+    public func log(from start: Commit, sorting: CommitSequence.Sorting) -> CommitSequence {
+        CommitSequence(repository: self, startOID: start.oid, sorting: sorting)
     }
 }
 
@@ -35,28 +41,44 @@ public struct CommitSequence: Sequence {
 
     internal let repository: Repository
     internal let startOID: OID
+    internal let sorting: Sorting
 
     public func makeIterator() -> CommitIterator {
-        CommitIterator(repository: repository, startOID: startOID)
+        CommitIterator(repository: repository, startOID: startOID, sorting: sorting)
     }
 }
 
 /// An iterator over a ``CommitSequence``.
 ///
-/// ``next()`` returns `nil` when the walk terminates, including when libgit2
+/// ``next()`` returns `nil` when the walk terminates — including when libgit2
 /// reports an error part-way through. Callers that need to distinguish
-/// successful termination from a mid-walk failure should wait for the v0.3
-/// `RevWalk` type, which surfaces errors explicitly.
+/// successful termination from a mid-walk failure should use ``RevWalk``
+/// directly.
 public struct CommitIterator: IteratorProtocol {
     public typealias Element = Commit
 
-    private let walker: RevWalkHandle
+    private let walker: RevWalk?
 
-    internal init(repository: Repository, startOID: OID) {
-        self.walker = RevWalkHandle(repository: repository, startOID: startOID)
+    internal init(repository: Repository, startOID: OID, sorting: CommitSequence.Sorting) {
+        // Silent-fail tradeoff: we can't throw from an IteratorProtocol init,
+        // so any setup error leaves `walker == nil` and `next()` returns nil.
+        // Callers who need strict error detection use RevWalk directly.
+        let walk: RevWalk? = try? RevWalk(repository: repository)
+        if let walk {
+            if sorting != .none {
+                try? walk.setSorting(sorting)
+            }
+            try? walk.push(oid: startOID)
+        }
+        self.walker = walk
     }
 
     public mutating func next() -> Commit? {
-        walker.nextCommit()
+        guard let walker else { return nil }
+        do {
+            return try walker.next()
+        } catch {
+            return nil
+        }
     }
 }

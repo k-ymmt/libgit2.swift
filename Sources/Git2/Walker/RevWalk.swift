@@ -109,3 +109,41 @@ public final class RevWalk: @unchecked Sendable {
         }
     }
 }
+
+extension CommitSequence {
+    /// Sort order applied to a ``CommitSequence`` or ``RevWalk``.
+    ///
+    /// Maps to libgit2's `git_sort_t` bit flags. `.topological` and `.time`
+    /// compose (`[.topological, .time]`). `.reverse` reverses whatever sort
+    /// order the other flags produce.
+    public struct Sorting: OptionSet, Sendable, Equatable {
+        public let rawValue: UInt32
+        public init(rawValue: UInt32) {
+            self.rawValue = rawValue
+        }
+
+        /// Topological order — a child is always emitted before any of its
+        /// ancestors.
+        public static let topological = Sorting(rawValue: GIT_SORT_TOPOLOGICAL.rawValue)
+
+        /// Committer-time order — newer commits first (unless combined with
+        /// ``reverse``).
+        public static let time        = Sorting(rawValue: GIT_SORT_TIME.rawValue)
+
+        /// Reverse whatever order the other flags produce.
+        public static let reverse     = Sorting(rawValue: GIT_SORT_REVERSE.rawValue)
+
+        /// Libgit2-default insertion order. Equivalent to `[]`.
+        public static let none: Sorting = []
+    }
+}
+
+extension RevWalk {
+    /// Set the walker's sort mode. Can be called multiple times; each call
+    /// replaces the previous mode.
+    public func setSorting(_ sorting: CommitSequence.Sorting) throws(GitError) {
+        try repository.lock.withLock { () throws(GitError) in
+            try check(git_revwalk_sorting(handle, sorting.rawValue))
+        }
+    }
+}
