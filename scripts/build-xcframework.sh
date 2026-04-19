@@ -133,4 +133,53 @@ module Cgit2 {
 MODMAP
 done
 
-echo "==> Done (headers + modulemap phase — remaining phases pending)"
+echo "==> [7/8] Create XCFramework"
+xcodebuild -create-xcframework \
+    -library "$SLICES_DIR/macos/libgit2.a"   -headers "$SLICES_DIR/macos/Headers" \
+    -library "$SLICES_DIR/ios/libgit2.a"     -headers "$SLICES_DIR/ios/Headers" \
+    -library "$SLICES_DIR/iossim/libgit2.a"  -headers "$SLICES_DIR/iossim/Headers" \
+    -output "$XCFRAMEWORK_DIR"
+
+echo "==> [8/8] Final verification"
+if [ ! -f "$XCFRAMEWORK_DIR/Info.plist" ]; then
+    echo "error: $XCFRAMEWORK_DIR/Info.plist missing" >&2
+    exit 1
+fi
+
+# Check that each expected slice directory exists inside the XCFramework.
+for needle in "macos-arm64_x86_64" "ios-arm64" "ios-arm64_x86_64-simulator"; do
+    if ! ls "$XCFRAMEWORK_DIR" | grep -q "$needle"; then
+        echo "error: expected slice '$needle' not found under $XCFRAMEWORK_DIR" >&2
+        ls "$XCFRAMEWORK_DIR" >&2
+        exit 1
+    fi
+done
+
+# Architecture checks via lipo -info on the staged slice archives.
+check_arches() {
+    local path="$1"; shift
+    local info
+    info="$(lipo -info "$path")"
+    for arch in "$@"; do
+        if ! echo "$info" | grep -q "$arch"; then
+            echo "error: $path missing expected arch '$arch' (got: $info)" >&2
+            exit 1
+        fi
+    done
+}
+check_arches "$SLICES_DIR/macos/libgit2.a"   arm64 x86_64
+check_arches "$SLICES_DIR/ios/libgit2.a"     arm64
+check_arches "$SLICES_DIR/iossim/libgit2.a"  arm64 x86_64
+
+# Header + modulemap existence checks.
+for platform in macos ios iossim; do
+    for required in "Headers/git2.h" "Headers/module.modulemap"; do
+        test -f "$SLICES_DIR/$platform/$required" || {
+            echo "error: $SLICES_DIR/$platform/$required missing" >&2
+            exit 1
+        }
+    done
+done
+
+echo "==> Success: $XCFRAMEWORK_DIR"
+du -sh "$XCFRAMEWORK_DIR"
