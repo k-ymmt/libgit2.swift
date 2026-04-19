@@ -1,7 +1,17 @@
 import Cgit2
 
+/// A named pointer to an object in the repository (a branch, a tag, or HEAD).
+///
+/// ``Reference`` owns a libgit2 reference handle. Child objects like ``Reference``
+/// hold a strong reference to their parent ``Repository``, ensuring the repo
+/// outlives anything derived from it.
+///
+/// All access to the reference is serialized through the parent repository's
+/// internal lock.
 public final class Reference: @unchecked Sendable {
     internal let handle: OpaquePointer
+
+    /// The repository this reference belongs to.
     public let repository: Repository
 
     internal init(handle: OpaquePointer, repository: Repository) {
@@ -13,18 +23,30 @@ public final class Reference: @unchecked Sendable {
         git_reference_free(handle)
     }
 
+    /// The full reference name, e.g. `"refs/heads/main"`, `"refs/tags/v1.0"`, or
+    /// `"HEAD"`.
     public var name: String {
         repository.lock.withLock {
+            // libgit2 contract: git_reference_name is non-NULL for a valid handle.
             String(cString: git_reference_name(handle)!)
         }
     }
 
+    /// The shortened reference name, e.g. `"main"` or `"v1.0"`.
     public var shorthand: String {
         repository.lock.withLock {
+            // libgit2 contract: git_reference_shorthand is non-NULL for a valid handle.
             String(cString: git_reference_shorthand(handle)!)
         }
     }
 
+    /// The OID the reference ultimately points at.
+    ///
+    /// Symbolic references (e.g. `HEAD` pointing at `refs/heads/main`) are
+    /// resolved to their direct target first.
+    ///
+    /// - Throws: ``GitError`` if the reference is symbolic and cannot be
+    ///   resolved, or if the resolved reference has no target.
     public var target: OID {
         get throws(GitError) {
             try repository.lock.withLock { () throws(GitError) -> OID in
@@ -39,6 +61,12 @@ public final class Reference: @unchecked Sendable {
         }
     }
 
+    /// Resolves this reference to a ``Commit``, peeling through tags if necessary.
+    ///
+    /// Useful for resolving a branch or HEAD directly to the commit it points at,
+    /// without having to manually peel annotated tags.
+    ///
+    /// - Throws: ``GitError`` if the reference cannot be peeled to a commit.
     public func resolveToCommit() throws(GitError) -> Commit {
         try repository.lock.withLock { () throws(GitError) -> Commit in
             var raw: OpaquePointer?
