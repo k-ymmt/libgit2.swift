@@ -109,6 +109,7 @@ The SDK paths are resolved via `xcrun --sdk <sdk> --show-sdk-path`.
    module Cgit2 {
        umbrella header "git2.h"
        export *
+       module * { export * }
    }
    ```
 7. **Create XCFramework**:
@@ -185,12 +186,12 @@ let package = Package(
 
 The `linkerSettings` are required because the bundled `libgit2.a` statically references Apple framework symbols (SecureTransport, CoreFoundation, GSSAPI) and system libraries (zlib, iconv). libgit2's internal features (SecureTransport HTTPS, Negotiate auth, iconv-based Unicode normalization) pull these in at compile time; we surface them to SwiftPM's linker step via `linkerSettings`.
 
-`Sources/libgit2.swift/Exports.swift` contains a single line:
+`Sources/libgit2.swift/libgit2_swift.swift` contains a single line:
 ```swift
 @_exported import Cgit2
 ```
 
-Until a Release is published, the README documents a local-override recipe that
+Until a Release is published, the Operator Runbook below describes a local-override recipe that
 swaps the remote `binaryTarget` for `.binaryTarget(path: "artifacts/libgit2.xcframework")`.
 
 ## Error Handling
@@ -204,7 +205,7 @@ swaps the remote `binaryTarget` for `.binaryTarget(path: "artifacts/libgit2.xcfr
 
 ## Testing
 
-`Tests/libgit2.swiftTests/Libgit2SmokeTests.swift` exercises the binary target:
+`Tests/libgit2.swiftTests/libgit2_swiftTests.swift` exercises the binary target:
 
 - Call `git_libgit2_init()` and assert the return value is non-negative.
 - Call `git_libgit2_version(&major, &minor, &rev)` and assert `major == 1` and

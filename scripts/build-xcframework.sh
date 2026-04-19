@@ -106,7 +106,10 @@ for platform in macos ios iossim; do
 done
 
 # Overlay CMake-generated headers (e.g. git2_features.h) from any of the
-# five build dirs — they are identical across slices for public headers.
+# five build dirs — they are identical across slices under the current
+# CMake options (USE_HTTPS=SecureTransport, USE_SHA1=builtin, USE_REGEX=builtin,
+# USE_SSH=OFF). If those options change to values that produce platform-specific
+# generated headers, switch to a per-slice overlay instead.
 representative_build="$BUILD_DIR/macos-arm64"
 if [ -d "$representative_build/include" ]; then
     for platform in macos ios iossim; do
