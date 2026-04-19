@@ -27,14 +27,14 @@ Items deferred from the v0.1.0 XCFramework implementation.
 
 1. **LICENSE file** — referenced from README; trivial cost and blocks nothing but should land before the first polished release.
 2. **GitHub Actions** — tag-push → build on a macOS runner → create release → attach zip. Removes the human from the release loop.
-3. **Swift wrapper v0.3 read-extensions** — Tree, Blob, Tag, polymorphic `Object`, tree-to-tree Diff, `Repository.discover(startingAt:)`, `Repository.references`, sortable `log(from:sorting:)`, public `RevWalk`.
+3. **Swift wrapper v0.3 read-extensions — shipped.** Tree, Blob, Tag, polymorphic `Object`, tree-to-tree Diff, `Repository.discover(startingAt:)`, `Repository.references`, sortable `log(from:sorting:)`, public `RevWalk`.
 4. **SSH support** — only if a concrete use case appears.
 
 ## Deferred from v0.2.0 (Swift wrapper first slice)
 
 - [x] **Public API doc comments.** Every public type in `Git2` has `///` doc comments (commit `03d6d6a`).
-- [ ] **`git_oid_fromstr` is deprecated in libgit2 1.x.** Currently used by `OID(hex:)`. Migrate to `git_oid_fromstrn` (or `git_oid_fromstrp` for prefix form) before libgit2 2.x removes it.
-- [ ] **`RevWalkHandle.init` swallows errors silently.** If `git_revwalk_new` or `git_revwalk_push` fails, `nextCommit()` returns `nil` forever with no diagnostic. `Repository.log(from: Commit)` is safe because `Commit` validity is already established, but a future `log(fromOID: OID)` overload would need to surface init failures. Plan to resolve this when the public `RevWalk` type lands in v0.3.
+- [x] **`git_oid_fromstr` is deprecated in libgit2 1.x.** Currently used by `OID(hex:)`. Migrate to `git_oid_fromstrn` (or `git_oid_fromstrp` for prefix form) before libgit2 2.x removes it. Resolved in Task 1 — `OID(hex:)` now uses `git_oid_fromstrn`.
+- [x] **`RevWalkHandle.init` swallows errors silently.** If `git_revwalk_new` or `git_revwalk_push` fails, `nextCommit()` returns `nil` forever with no diagnostic. `Repository.log(from: Commit)` is safe because `Commit` validity is already established, but a future `log(fromOID: OID)` overload would need to surface init failures. Resolved in Task 9 — `RevWalkHandle` deleted; public `RevWalk` has throwing init/push/next.
 - [x] **Defensive force-unwraps have libgit2 contract comments** (added alongside DocC comments in `03d6d6a`).
 - [ ] **ThreadSanitizer in CI.** Spec §9.4 lists this as an unaddressed test-coverage gap. Worth wiring once GitHub Actions is set up (see #3 above).
 - [x] **CHANGELOG.md** for v0.1.0 → v0.2.0 (landed pre-release).
@@ -50,13 +50,13 @@ implementation.
 
 ### v0.3 — read extensions
 
-- [ ] **`Repository.discover(startingAt:)`** — walk up from a child directory to find `.git`.
-- [ ] **`Repository.references`** (list) and **`reference(named:)`** (lookup).
-- [ ] **`Tree` / `Blob` / `Tag` / polymorphic `Object` enum** — the other object types.
-- [ ] **`Diff`** — tree-to-tree, file-level (no hunk/line yet).
-- [ ] **`CommitSequence.Sorting`** — `.none` / `.topological` / `.time` / `.reverse`, exposed via a new `log(from:sorting:)` overload.
-- [ ] **Public `RevWalk` type** — advanced revwalk control (`push(refName:)`, `hide(_:)`, `simplifyFirstParent()`, explicit error reporting). Resolves the "silent init failure" limitation in `RevWalkHandle`.
-- [ ] **Tag peel handling in `Reference`** — right now `resolveToCommit()` handles annotated tags, but there is no standalone test.
+- [x] **`Repository.discover(startingAt:)`** — walk up from a child directory to find `.git`. Resolved by discover + open(discoveringFrom:).
+- [x] **`Repository.references`** (list) and **`reference(named:)`** (lookup). Resolved.
+- [x] **`Tree` / `Blob` / `Tag` / polymorphic `Object` enum** — the other object types. Resolved.
+- [x] **`Diff`** — tree-to-tree, file-level (no hunk/line yet). Resolved.
+- [x] **`CommitSequence.Sorting`** — `.none` / `.topological` / `.time` / `.reverse`, exposed via a new `log(from:sorting:)` overload. Resolved.
+- [x] **Public `RevWalk` type** — advanced revwalk control (`push(refName:)`, `hide(_:)`, `simplifyFirstParent()`, explicit error reporting). Resolved.
+- [x] **Tag peel handling in `Reference`** — right now `resolveToCommit()` handles annotated tags, but there is no standalone test. Resolved (test added).
 
 ### v0.4 — write operations
 
