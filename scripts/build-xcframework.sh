@@ -42,4 +42,42 @@ rm -rf "$BUILD_DIR" "$SLICES_DIR" "$XCFRAMEWORK_DIR"
 rm -f "$XCFRAMEWORK_ZIP"
 mkdir -p "$BUILD_DIR" "$SLICES_DIR"
 
-echo "==> Done (skeleton only — remaining phases not yet implemented)"
+echo "==> [3/8] Per-slice CMake + Ninja build"
+for entry in "${SLICES[@]}"; do
+    IFS='|' read -r slice system sdk arch target <<< "$entry"
+    sdk_path="$(xcrun --sdk "$sdk" --show-sdk-path)"
+    build_subdir="$BUILD_DIR/$slice"
+    mkdir -p "$build_subdir"
+
+    echo "---- building $slice (system=$system sdk=$sdk arch=$arch target=$target)"
+    cmake -S libgit2 -B "$build_subdir" -G Ninja \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DBUILD_TESTS=OFF \
+        -DBUILD_CLI=OFF \
+        -DBUILD_EXAMPLES=OFF \
+        -DUSE_SSH=OFF \
+        -DUSE_HTTPS=SecureTransport \
+        -DUSE_SHA1=builtin \
+        -DUSE_REGEX=builtin \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_SYSTEM_NAME="$system" \
+        -DCMAKE_OSX_SYSROOT="$sdk_path" \
+        -DCMAKE_OSX_ARCHITECTURES="$arch" \
+        -DCMAKE_OSX_DEPLOYMENT_TARGET="$target"
+
+    cmake --build "$build_subdir" --config Release
+
+    if [ ! -f "$build_subdir/libgit2.a" ]; then
+        # libgit2 may place the static lib under a subdirectory depending on
+        # CMake version. Search for it under the build dir and fail loudly
+        # if it's missing.
+        found="$(find "$build_subdir" -name 'libgit2.a' -maxdepth 3 | head -n1)"
+        if [ -z "$found" ]; then
+            echo "error: libgit2.a not found under $build_subdir" >&2
+            exit 1
+        fi
+        cp "$found" "$build_subdir/libgit2.a"
+    fi
+done
+
+echo "==> Done (build phase — remaining phases pending)"
