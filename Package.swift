@@ -16,7 +16,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "Cgit2",
-            path: "artifacts/libgit2.xcframework"
+            url: "https://github.com/k-ymmt/libgit2.swift/releases/download/v0.1.0/libgit2.xcframework.zip",
+            checksum: "31f84a90e9fa8887b4e45280d01a1ca06b8c2134293dbaf30b627ec2094db46b"
         ),
         .target(
             name: "libgit2.swift",
