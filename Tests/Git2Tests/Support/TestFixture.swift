@@ -279,6 +279,34 @@ extension TestFixture {
 }
 
 extension TestFixture {
+    /// Create additional `refs/heads/<name>` pointing at `target` on top of an
+    /// existing repository.
+    static func makeBranches(
+        names: [String],
+        pointingAt target: git_oid,
+        in repositoryURL: URL
+    ) throws {
+        var repoHandle: OpaquePointer?
+        let rOpen: Int32 = repositoryURL.withUnsafeFileSystemRepresentation { path in
+            guard let path else { return -1 }
+            return git_repository_open(&repoHandle, path)
+        }
+        guard rOpen == 0, let repo = repoHandle else { throw GitError.fromLibgit2(rOpen) }
+        defer { git_repository_free(repo) }
+
+        for name in names {
+            var refHandle: OpaquePointer?
+            var targetCopy = target
+            let rCreate: Int32 = "refs/heads/\(name)".withCString { full in
+                git_reference_create(&refHandle, repo, full, &targetCopy, /* force */ 0, nil)
+            }
+            guard rCreate == 0 else { throw GitError.fromLibgit2(rCreate) }
+            git_reference_free(refHandle)
+        }
+    }
+}
+
+extension TestFixture {
     /// Writes an annotated tag pointing at `target` and installs the
     /// `refs/tags/<name>` reference. Returns the annotated tag's OID.
     @discardableResult

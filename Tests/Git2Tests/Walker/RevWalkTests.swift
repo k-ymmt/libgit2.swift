@@ -102,10 +102,33 @@ extension RuntimeSensitiveTests {
             }
         }
 
-        // MARK: - hidePrunesSubgraph is deferred until Task 10 adds
-        //         Repository.reference(named:). Re-enable at that point.
-        // @Test
-        // func hidePrunesSubgraph() throws { ... }
+        @Test
+        func hidePrunesSubgraph() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                // D is the merge of B and C; both share parent A.
+                let fixture = try TestFixture.makeMergeHistory(in: dir)
+                let repo = try Repository.open(at: fixture.repositoryURL)
+                let tip = try repo.head().resolveToCommit()
+
+                // Resolve the side branch's tip by name.
+                let sideRef = try #require(try repo.reference(named: "refs/heads/side"))
+                let sideTipOID = try sideRef.target
+
+                let walk = try RevWalk(repository: repo)
+                try walk.push(tip)
+                try walk.hide(oid: sideTipOID)
+
+                var summaries: [String] = []
+                while let c = try walk.next() { summaries.append(c.summary) }
+                // With C (and its ancestors reachable only via C) hidden, the
+                // remaining set is D (merge) + B + A... but A is ALSO reachable
+                // from the hidden side tip, so A is pruned. Remaining: D + B.
+                #expect(Set(summaries) == Set(["D (merge)", "B"]))
+            }
+        }
 
         @Test
         func simplifyFirstParentFollowsMainLineOnly() throws {
