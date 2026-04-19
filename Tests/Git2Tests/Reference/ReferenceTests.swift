@@ -26,5 +26,33 @@ extension RuntimeSensitiveTests {
                 #expect(commit.summary == "only")
             }
         }
+
+        @Test
+        func referenceToAnnotatedTagPeelsToCommit() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let fixture = try TestFixture.makeLinearHistory(
+                    commits: [(message: "only", author: .test)],
+                    in: dir
+                )
+                let repo = try Repository.open(at: fixture.repositoryURL)
+                let tipOID = try repo.head().target
+
+                _ = try TestFixture.makeAnnotatedTag(
+                    name: "v0.0.1",
+                    pointingAt: tipOID.raw,
+                    message: "release",
+                    in: fixture.repositoryURL
+                )
+
+                // refs/tags/v0.0.1 is a reference to an annotated tag object.
+                // resolveToCommit() must peel through the tag to the commit.
+                let tagRef = try #require(try repo.reference(named: "refs/tags/v0.0.1"))
+                let commit = try tagRef.resolveToCommit()
+                #expect(commit.oid == tipOID)
+            }
+        }
     }
 }
