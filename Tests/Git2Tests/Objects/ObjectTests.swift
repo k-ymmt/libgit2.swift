@@ -5,6 +5,67 @@ import Cgit2
 
 extension RuntimeSensitiveTests {
     @Suite(.serialized)
+    struct ObjectLookupTests {
+        @Test
+        func objectForCommitReturnsCommitCase() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let fixture = try TestFixture.makeLinearHistory(
+                    commits: [(message: "m", author: .test)],
+                    in: dir
+                )
+                let repo = try Repository.open(at: fixture.repositoryURL)
+                let oid = try repo.head().target
+                let obj = try #require(try repo.object(for: oid))
+                if case .commit(let commit) = obj {
+                    #expect(commit.oid == oid)
+                    #expect(obj.kind == .commit)
+                } else {
+                    Issue.record("expected .commit, got \(obj)")
+                }
+            }
+        }
+
+        @Test
+        func objectForUnknownOidReturnsNil() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let fixture = try TestFixture.makeLinearHistory(
+                    commits: [(message: "m", author: .test)],
+                    in: dir
+                )
+                let repo = try Repository.open(at: fixture.repositoryURL)
+                let missing = try OID(hex: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+                #expect(try repo.object(for: missing) == nil)
+            }
+        }
+
+        @Test
+        func objectKindOidAccessorsMatch() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let fixture = try TestFixture.makeLinearHistory(
+                    commits: [(message: "m", author: .test)],
+                    in: dir
+                )
+                let repo = try Repository.open(at: fixture.repositoryURL)
+                let oid = try repo.head().target
+                let obj = try #require(try repo.object(for: oid))
+                #expect(obj.oid == oid)
+                #expect(obj.kind == .commit)
+            }
+        }
+    }
+}
+
+extension RuntimeSensitiveTests {
+    @Suite(.serialized)
     struct ObjectHandleInternalTests {
         @Test
         func lookupAnyResolvesACommit() throws {

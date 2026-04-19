@@ -262,3 +262,50 @@ extension TestFixture {
         return (TestFixture(repositoryURL: directory), treeID, commitID)
     }
 }
+
+extension TestFixture {
+    /// Writes an annotated tag pointing at `target` and installs the
+    /// `refs/tags/<name>` reference. Returns the annotated tag's OID.
+    @discardableResult
+    static func makeAnnotatedTag(
+        name: String,
+        pointingAt target: git_oid,
+        targetKind: git_object_t = GIT_OBJECT_COMMIT,
+        message: String = "annotated",
+        tagger: Signature = .test,
+        in repositoryURL: URL
+    ) throws -> git_oid {
+        var repoHandle: OpaquePointer?
+        let rOpen: Int32 = repositoryURL.withUnsafeFileSystemRepresentation { path in
+            guard let path else { return -1 }
+            return git_repository_open(&repoHandle, path)
+        }
+        guard rOpen == 0, let repo = repoHandle else { throw GitError.fromLibgit2(rOpen) }
+        defer { git_repository_free(repo) }
+
+        var targetHandle: OpaquePointer?
+        var targetCopy = target
+        let rTL = git_object_lookup(&targetHandle, repo, &targetCopy, targetKind)
+        guard rTL == 0, let th = targetHandle else { throw GitError.fromLibgit2(rTL) }
+        defer { git_object_free(th) }
+
+        var sigPtr: UnsafeMutablePointer<git_signature>?
+        let rSig = git_signature_new(
+            &sigPtr,
+            tagger.name, tagger.email,
+            git_time_t(tagger.date.timeIntervalSince1970),
+            Int32(tagger.timeZone.secondsFromGMT() / 60)
+        )
+        guard rSig == 0, let sig = sigPtr else { throw GitError.fromLibgit2(rSig) }
+        defer { git_signature_free(sig) }
+
+        var tagOID = git_oid()
+        let rCreate: Int32 = name.withCString { namePtr in
+            message.withCString { messagePtr in
+                git_tag_create(&tagOID, repo, namePtr, th, sig, messagePtr, /* force */ 0)
+            }
+        }
+        guard rCreate == 0 else { throw GitError.fromLibgit2(rCreate) }
+        return tagOID
+    }
+}
