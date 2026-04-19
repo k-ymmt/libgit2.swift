@@ -95,4 +95,42 @@ lipo -create \
     "$BUILD_DIR/iossim-x86_64/libgit2.a" \
     -output "$SLICES_DIR/iossim/libgit2.a"
 
-echo "==> Done (lipo phase — remaining phases pending)"
+echo "==> [5/8] Collect headers"
+for platform in macos ios iossim; do
+    headers_dst="$SLICES_DIR/$platform/Headers"
+    mkdir -p "$headers_dst"
+    # Copy source headers (git2.h and the git2/ subdirectory)
+    cp "libgit2/include/git2.h" "$headers_dst/git2.h"
+    rm -rf "$headers_dst/git2"
+    cp -R "libgit2/include/git2" "$headers_dst/git2"
+done
+
+# Overlay CMake-generated headers (e.g. git2_features.h) from any of the
+# five build dirs — they are identical across slices for public headers.
+representative_build="$BUILD_DIR/macos-arm64"
+if [ -d "$representative_build/include" ]; then
+    for platform in macos ios iossim; do
+        headers_dst="$SLICES_DIR/$platform/Headers"
+        # Copy each file found under the build include dir, preserving
+        # relative paths.
+        (cd "$representative_build/include" && find . -type f) | while read -r rel; do
+            src="$representative_build/include/$rel"
+            dst="$headers_dst/$rel"
+            mkdir -p "$(dirname "$dst")"
+            cp "$src" "$dst"
+        done
+    done
+fi
+
+echo "==> [6/8] Emit module.modulemap"
+for platform in macos ios iossim; do
+    cat > "$SLICES_DIR/$platform/Headers/module.modulemap" <<'MODMAP'
+module Cgit2 {
+    umbrella header "git2.h"
+    export *
+    module * { export * }
+}
+MODMAP
+done
+
+echo "==> Done (headers + modulemap phase — remaining phases pending)"
