@@ -80,4 +80,19 @@ for entry in "${SLICES[@]}"; do
     fi
 done
 
-echo "==> Done (build phase — remaining phases pending)"
+echo "==> [4/8] Universalize per platform (lipo)"
+mkdir -p "$SLICES_DIR/macos" "$SLICES_DIR/ios" "$SLICES_DIR/iossim"
+
+lipo -create \
+    "$BUILD_DIR/macos-arm64/libgit2.a" \
+    "$BUILD_DIR/macos-x86_64/libgit2.a" \
+    -output "$SLICES_DIR/macos/libgit2.a"
+
+cp "$BUILD_DIR/ios-arm64/libgit2.a" "$SLICES_DIR/ios/libgit2.a"
+
+lipo -create \
+    "$BUILD_DIR/iossim-arm64/libgit2.a" \
+    "$BUILD_DIR/iossim-x86_64/libgit2.a" \
+    -output "$SLICES_DIR/iossim/libgit2.a"
+
+echo "==> Done (lipo phase — remaining phases pending)"
