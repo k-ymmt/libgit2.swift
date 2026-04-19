@@ -15,8 +15,10 @@ struct ObjectKindTests {
 
     @Test
     func unknownObjectTypesMapToNil() {
-        #expect(ObjectKind.from(GIT_OBJECT_ANY)    == nil)
+        #expect(ObjectKind.from(GIT_OBJECT_ANY)     == nil)
         #expect(ObjectKind.from(GIT_OBJECT_INVALID) == nil)
+        #expect(ObjectKind.from(git_object_t(5))    == nil)  // GIT_OBJECT_OFS_DELTA
+        #expect(ObjectKind.from(git_object_t(6))    == nil)  // GIT_OBJECT_REF_DELTA
     }
 
     @Test
