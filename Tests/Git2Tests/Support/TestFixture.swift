@@ -195,8 +195,19 @@ extension TestFixture {
     /// Entry description for ``makeCommitWithTree``.
     struct TreeEntryDescription {
         let path: String
-        let content: String
+        let content: Data
         let mode: git_filemode_t
+
+        init(path: String, content: Data, mode: git_filemode_t) {
+            self.path = path
+            self.content = content
+            self.mode = mode
+        }
+
+        /// Convenience initializer that encodes the string as UTF-8.
+        init(path: String, content: String, mode: git_filemode_t) {
+            self.init(path: path, content: Data(content.utf8), mode: mode)
+        }
     }
 
     /// Creates a repository with a single commit whose tree contains the given
@@ -224,10 +235,14 @@ extension TestFixture {
 
         for entry in entries {
             var blobID = git_oid()
-            try entry.content.withCString { bytes in
-                let r = git_blob_create_from_buffer(&blobID, repo, UnsafeRawPointer(bytes), strlen(bytes))
-                guard r == 0 else { throw GitError.fromLibgit2(r) }
+            let rBlob = entry.content.withUnsafeBytes { buf -> Int32 in
+                // buf.baseAddress may be nil only when count == 0; libgit2's
+                // git_blob_create_from_buffer accepts a NULL pointer when len == 0,
+                // but to be safe we pass a valid non-nil pointer.
+                let ptr = buf.baseAddress ?? UnsafeRawPointer(bitPattern: 1)!
+                return git_blob_create_from_buffer(&blobID, repo, ptr, buf.count)
             }
+            guard rBlob == 0 else { throw GitError.fromLibgit2(rBlob) }
             let rIns = git_treebuilder_insert(nil, tb, entry.path, &blobID, entry.mode)
             guard rIns == 0 else { throw GitError.fromLibgit2(rIns) }
         }

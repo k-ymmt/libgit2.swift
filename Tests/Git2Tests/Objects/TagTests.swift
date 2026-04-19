@@ -30,8 +30,7 @@ extension RuntimeSensitiveTests {
                     return
                 }
                 #expect(tag.name == "v0.0.1")
-                // libgit2 may or may not append a trailing newline depending on version.
-                #expect(tag.message.hasPrefix("release notes"))
+                #expect(tag.message.trimmingCharacters(in: .newlines) == "release notes")
                 #expect(tag.tagger?.name == Signature.test.name)
                 #expect(tag.targetOID == tipOID)
                 #expect(tag.targetKind == .commit)
