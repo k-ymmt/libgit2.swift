@@ -166,7 +166,14 @@ let package = Package(
         ),
         .target(
             name: "libgit2.swift",
-            dependencies: ["Cgit2"]
+            dependencies: ["Cgit2"],
+            linkerSettings: [
+                .linkedFramework("Security"),
+                .linkedFramework("CoreFoundation"),
+                .linkedFramework("GSS"),
+                .linkedLibrary("z"),
+                .linkedLibrary("iconv"),
+            ]
         ),
         .testTarget(
             name: "libgit2.swiftTests",
@@ -175,6 +182,8 @@ let package = Package(
     ]
 )
 ```
+
+The `linkerSettings` are required because the bundled `libgit2.a` statically references Apple framework symbols (SecureTransport, CoreFoundation, GSSAPI) and system libraries (zlib, iconv). libgit2's internal features (SecureTransport HTTPS, Negotiate auth, iconv-based Unicode normalization) pull these in at compile time; we surface them to SwiftPM's linker step via `linkerSettings`.
 
 `Sources/libgit2.swift/Exports.swift` contains a single line:
 ```swift
@@ -210,6 +219,19 @@ Verification loop (manual during development):
 
 iOS execution of tests is out of scope; iOS slice coverage is guaranteed by the
 `lipo -info` checks in the build script.
+
+## Operator Runbook
+
+1. `git submodule update --init --recursive`
+2. `./scripts/build-xcframework.sh`
+3. `./scripts/release-xcframework.sh` — records the SHA-256 in its output.
+4. Upload `artifacts/libgit2.xcframework.zip` to a new GitHub Release.
+5. Edit `Package.swift`: swap the `.binaryTarget(name: "Cgit2", path: ...)`
+   line for a `.binaryTarget(name: "Cgit2", url: ..., checksum: ...)` using
+   the Release's download URL and the printed checksum. Commit.
+
+To temporarily fall back to a local XCFramework build during development,
+revert to the `path:` form.
 
 ## Acceptance Criteria
 
