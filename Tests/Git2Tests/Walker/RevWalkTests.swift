@@ -171,5 +171,34 @@ extension RuntimeSensitiveTests {
                 #expect(try walk.next() == nil)
             }
         }
+
+        @Test
+        func setSortingAffectsNextOrder() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let fixture = try TestFixture.makeLinearHistory(
+                    commits: [
+                        (message: "first",  author: .test),
+                        (message: "second", author: .test),
+                        (message: "third",  author: .test),
+                    ],
+                    in: dir
+                )
+                let repo = try Repository.open(at: fixture.repositoryURL)
+                let tip = try repo.head().resolveToCommit()
+
+                // Default order: newest-first (third, second, first).
+                let walk = try RevWalk(repository: repo)
+                try walk.setSorting(.reverse)
+                try walk.push(tip)
+                var summaries: [String] = []
+                while let c = try walk.next() {
+                    summaries.append(c.summary)
+                }
+                #expect(summaries == ["first", "second", "third"])
+            }
+        }
     }
 }
