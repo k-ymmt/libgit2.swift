@@ -40,3 +40,46 @@ Items deferred from the v0.1.0 XCFramework implementation.
 - [x] **CHANGELOG.md** for v0.1.0 → v0.2.0 (landed pre-release).
 - [x] **README.md** with SwiftPM snippet + quick-start (landed pre-release; the earlier "README" item in this file is now obsolete).
 - [ ] **LICENSE file.** README references it; add before tagging if possible.
+
+## Future wrapper slices (planned post-v0.2.0)
+
+Mirrors the roadmap in the v0.2.0 design spec §10.2
+(`docs/superpowers/specs/2026-04-20-git2-swift-wrapper-foundation-design.md`).
+Phase labels are non-binding — each slice will get its own spec before
+implementation.
+
+### v0.3 — read extensions
+
+- [ ] **`Repository.discover(startingAt:)`** — walk up from a child directory to find `.git`.
+- [ ] **`Repository.references`** (list) and **`reference(named:)`** (lookup).
+- [ ] **`Tree` / `Blob` / `Tag` / polymorphic `Object` enum** — the other object types.
+- [ ] **`Diff`** — tree-to-tree, file-level (no hunk/line yet).
+- [ ] **`CommitSequence.Sorting`** — `.none` / `.topological` / `.time` / `.reverse`, exposed via a new `log(from:sorting:)` overload.
+- [ ] **Public `RevWalk` type** — advanced revwalk control (`push(refName:)`, `hide(_:)`, `simplifyFirstParent()`, explicit error reporting). Resolves the "silent init failure" limitation in `RevWalkHandle`.
+- [ ] **Tag peel handling in `Reference`** — right now `resolveToCommit()` handles annotated tags, but there is no standalone test.
+
+### v0.4 — write operations
+
+- [ ] **Commit creation** — `Repository.commit(tree:parents:author:committer:message:)` or similar. Replaces the test-only `TestFixture` builder with a real public API.
+- [ ] **Branch creation / deletion**.
+- [ ] **Tag creation / deletion** (lightweight and annotated).
+- [ ] **Index / staging** — `git_index_*` wrapper.
+- [ ] **HEAD manipulation** — checkout, branch switching.
+
+### v0.5+ — network & advanced
+
+- [ ] **Remote / fetch / push** (HTTPS). Callbacks for credentials surfaced to the user; no UI.
+- [ ] **Merge / rebase / cherry-pick**. Deep write operations with conflict handling.
+- [ ] **SSH support**. Requires building `libssh2` into the XCFramework (or a sibling framework) — tracked above under "Out of scope from v0.1.0".
+
+### Potential future directions (unscoped)
+
+- [ ] **Async / actor-based high-level API.** During v0.2.0 brainstorming we picked `@unchecked Sendable` + synchronous + internal lock over an `actor Repository`. Reconsider if a compelling async-first use case shows up (e.g. SwiftUI views that want to observe repo state without blocking).
+- [ ] **Benchmarks.** Spec §9.4 notes that performance under large histories is not measured. Worth standing up a `swift-package-manager-plugin` or a simple benchmark target when a concrete regression is suspected.
+- [ ] **Hooks, worktrees, submodules, stash, bisect, reflog, notes, attributes, config.** libgit2 exposes all of these; none are covered yet. Prioritize when a user asks.
+
+## Minor polish (non-blocking)
+
+- [ ] **`Signature.timeZone` fallback comment** — already mentions "defensive" but could link to Git's offset range (±14h) explicitly.
+- [ ] **`Repository.open` sentinel when `withUnsafeFileSystemRepresentation` yields nil** — currently returns `GIT_EINVALIDSPEC`. `preconditionFailure` (bad URL = programmer error) would be clearer; needs confirmation that the nil path truly cannot happen in practice.
+- [ ] **Pre-existing test warnings** — `as GitError` "always true" warning in `GitErrorTests.swift:94`, and a redundant `try` on a non-throwing call in `RepositoryHeadTests.swift:39`. Neither affects correctness; tidy on the next test refactor.
