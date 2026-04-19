@@ -61,6 +61,12 @@ public struct ReferenceIterator: IteratorProtocol {
                 var outHandle: OpaquePointer?
                 let r = git_reference_next(&outHandle, iter)
                 if r == GIT_ITEROVER.rawValue || r < 0 {
+                    // Iteration is permanently done. Free the underlying libgit2
+                    // iterator now rather than waiting for `deinit`, and null out
+                    // `raw` so subsequent `next()` calls short-circuit without
+                    // re-entering libgit2.
+                    git_reference_iterator_free(iter)
+                    raw = nil
                     return nil
                 }
                 return Reference(handle: outHandle!, repository: repository)
