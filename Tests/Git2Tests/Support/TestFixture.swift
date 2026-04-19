@@ -190,3 +190,75 @@ extension TestFixture {
         return TestFixture(repositoryURL: directory)
     }
 }
+
+extension TestFixture {
+    /// Entry description for ``makeCommitWithTree``.
+    struct TreeEntryDescription {
+        let path: String
+        let content: String
+        let mode: git_filemode_t
+    }
+
+    /// Creates a repository with a single commit whose tree contains the given
+    /// entries. Executable / symlink / submodule modes are supported via
+    /// `git_filemode_t`. Returns (fixture, treeOID, commitOID).
+    @discardableResult
+    static func makeCommitWithTree(
+        entries: [TreeEntryDescription],
+        message: String = "initial",
+        in directory: URL
+    ) throws -> (fixture: TestFixture, treeOID: git_oid, commitOID: git_oid) {
+        var repoHandle: OpaquePointer?
+        let rInit: Int32 = directory.withUnsafeFileSystemRepresentation { path in
+            guard let path else { return -1 }
+            return git_repository_init(&repoHandle, path, 0)
+        }
+        guard rInit == 0, let repo = repoHandle else { throw GitError.fromLibgit2(rInit) }
+        defer { git_repository_free(repo) }
+
+        // Build tree.
+        var builder: OpaquePointer?
+        let rB = git_treebuilder_new(&builder, repo, nil)
+        guard rB == 0, let tb = builder else { throw GitError.fromLibgit2(rB) }
+        defer { git_treebuilder_free(tb) }
+
+        for entry in entries {
+            var blobID = git_oid()
+            try entry.content.withCString { bytes in
+                let r = git_blob_create_from_buffer(&blobID, repo, UnsafeRawPointer(bytes), strlen(bytes))
+                guard r == 0 else { throw GitError.fromLibgit2(r) }
+            }
+            let rIns = git_treebuilder_insert(nil, tb, entry.path, &blobID, entry.mode)
+            guard rIns == 0 else { throw GitError.fromLibgit2(rIns) }
+        }
+
+        var treeID = git_oid()
+        let rW = git_treebuilder_write(&treeID, tb)
+        guard rW == 0 else { throw GitError.fromLibgit2(rW) }
+
+        var tree: OpaquePointer?
+        let rT = git_tree_lookup(&tree, repo, &treeID)
+        guard rT == 0, let treeH = tree else { throw GitError.fromLibgit2(rT) }
+        defer { git_tree_free(treeH) }
+
+        var sigPtr: UnsafeMutablePointer<git_signature>?
+        let rSig = git_signature_new(
+            &sigPtr, "Tester", "tester@example.com",
+            git_time_t(1_700_000_000), 0
+        )
+        guard rSig == 0, let signature = sigPtr else { throw GitError.fromLibgit2(rSig) }
+        defer { git_signature_free(signature) }
+
+        var commitID = git_oid()
+        let rC: Int32 = message.withCString { msg in
+            git_commit_create(
+                &commitID, repo, "HEAD",
+                signature, signature, "UTF-8", msg, treeH,
+                0, nil
+            )
+        }
+        guard rC == 0 else { throw GitError.fromLibgit2(rC) }
+
+        return (TestFixture(repositoryURL: directory), treeID, commitID)
+    }
+}
