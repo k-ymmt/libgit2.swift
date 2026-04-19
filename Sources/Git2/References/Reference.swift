@@ -38,4 +38,12 @@ public final class Reference: @unchecked Sendable {
             }
         }
     }
+
+    public func resolveToCommit() throws(GitError) -> Commit {
+        try repository.lock.withLock { () throws(GitError) -> Commit in
+            var raw: OpaquePointer?
+            try check(git_reference_peel(&raw, handle, GIT_OBJECT_COMMIT))
+            return Commit(handle: raw!, repository: repository)
+        }
+    }
 }

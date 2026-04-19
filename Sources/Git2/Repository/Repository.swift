@@ -54,4 +54,13 @@ public final class Repository: @unchecked Sendable {
             return Reference(handle: raw!, repository: self)
         }
     }
+
+    public func commit(for oid: OID) throws(GitError) -> Commit {
+        try lock.withLock { () throws(GitError) -> Commit in
+            var oidCopy = oid.raw
+            var raw: OpaquePointer?
+            try check(git_commit_lookup(&raw, handle, &oidCopy))
+            return Commit(handle: raw!, repository: self)
+        }
+    }
 }
