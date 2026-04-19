@@ -53,5 +53,40 @@ extension RuntimeSensitiveTests {
                 #expect(commit.body == nil)
             }
         }
+
+        @Test
+        func commitParentsForLinearHistory() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let fixture = try TestFixture.makeLinearHistory(
+                    commits: [
+                        (message: "first",  author: .test),
+                        (message: "second", author: .test),
+                    ],
+                    in: dir
+                )
+                let repo = try Repository.open(at: fixture.repositoryURL)
+                let tip = try repo.head().resolveToCommit()
+                let parents = try tip.parents()
+                #expect(parents.count == 1)
+                #expect(parents[0].summary == "first")
+            }
+        }
+
+        @Test
+        func commitParentsForMergeHistory() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let fixture = try TestFixture.makeMergeHistory(in: dir)
+                let repo = try Repository.open(at: fixture.repositoryURL)
+                let tip = try repo.head().resolveToCommit()
+                let parents = try tip.parents()
+                #expect(parents.count == 2)
+            }
+        }
     }
 }

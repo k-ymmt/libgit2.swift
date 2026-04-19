@@ -55,4 +55,18 @@ public final class Commit: @unchecked Sendable {
             Int(git_commit_parentcount(handle))
         }
     }
+
+    public func parents() throws(GitError) -> [Commit] {
+        try repository.lock.withLock { () throws(GitError) -> [Commit] in
+            let count = git_commit_parentcount(handle)
+            var out: [Commit] = []
+            out.reserveCapacity(Int(count))
+            for index: UInt32 in 0..<count {
+                var raw: OpaquePointer?
+                try check(git_commit_parent(&raw, handle, index))
+                out.append(Commit(handle: raw!, repository: repository))
+            }
+            return out
+        }
+    }
 }
