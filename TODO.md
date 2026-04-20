@@ -49,6 +49,17 @@ Non-blocking follow-ups identified while designing v0.4a. Each is an additive, n
 - [ ] **`tree(entries:)` duplicate check is String-based.** The `Set<String>` guard treats Unicode NFC vs NFD variants of the same logical name as duplicates, while libgit2 would byte-compare and accept them. Unlikely to bite in practice, but document the assumption or normalize the names before insertion.
 - [ ] **FileMode integration coverage for `.link` / `.commit`.** `TreeEntryFileModeRawTests` covers every case as a unit, and `TreeTests` covers `.blob` / `.blobExecutable`. Add a `tree(entries:)` integration test that round-trips a symbolic-link and a submodule-commit entry through the ODB once the fixture layer supports them more conveniently.
 
+## Deferred from v0.4b-i (Index slice)
+
+Non-blocking follow-ups identified while designing v0.4b-i. Each is additive and non-breaking, and can be revisited when a concrete use case appears.
+
+- [ ] **Manual `IndexEntry` insertion.** Public API that takes a caller-constructed `IndexEntry` (stage included) and writes it to the index. Requires a public `IndexEntry.Stage.rawFlags` round-trip. Defer until Merge / cherry-pick need it.
+- [ ] **`Index.readTree(from: Tree)` and `Index.clear()`.** Consumed by Merge / reset-style flows that do not exist yet.
+- [ ] **Pathspec-based bulk operations.** `Index.addAll(pathspec:)` / `.removeAll(pathspec:)` / `.updateAll(pathspec:)` wrapping `git_index_add_all` / `_remove_all` / `_update_all`. v0.4b-i takes a single `String` path per call.
+- [ ] **Extended `IndexEntry` stat fields.** `mtime`, `ctime`, `fileSize`, `uid`, `gid`, `dev`, `ino`, `flags_extended`. Surface when a stat-based diff or working-tree-dirty-detection API is added.
+- [ ] **Lazy iteration.** `Index.lazyEntries() -> some Sequence<IndexEntry>` / `lazyConflicts() -> some Sequence<IndexConflict>`. v0.4b-i returns Array snapshots. Add only if a concrete performance pressure appears.
+- [ ] **`TestFixture.makeConflictedIndex` migration off `Cgit2`.** v0.4b-i constructs synthetic 3-way conflicts via `git_index_add` with stage-encoded flags because no public API accepts stage-carrying entries yet. Replace with a public Merge-API-based helper once that slice lands.
+
 ## Deferred from v0.3.0 (Swift wrapper read extensions)
 
 - [ ] **`RevWalk.next()` holds the lock across `git_commit_lookup`.** The closure passed to `repository.lock.withLock` does (a) `git_revwalk_next` and (b) `git_commit_lookup` back-to-back. No deadlock in practice (the standard `while let c = try walk.next()` loop releases the lock between calls), but it serializes the lookup against every other repo operation and is a future trap if the lookup grows side effects. Worth revisiting when introducing additional throwing APIs that want to call into the public surface mid-walk.
@@ -69,7 +80,10 @@ Split into two slices. v0.4a covers the ODB-write surface (blob / tree / commit 
 
 #### v0.4b — index, checkout, HEAD
 
-- [ ] **Index / staging** — `git_index_*` wrapper (read, add, remove, write, conflict enumeration).
+Split into two slices. v0.4b-i covers the index surface (read, stage from working dir, conflict enumeration, write-tree). v0.4b-ii covers the filesystem-touching surface (checkout, HEAD manipulation). See the v0.4b-i spec under `docs/superpowers/specs/2026-04-20-git2-v0.4b-i-index-design.md`.
+
+##### v0.4b-ii — checkout, HEAD
+
 - [ ] **Checkout** — `git_checkout_head` / `git_checkout_tree` / `git_checkout_index` with safety options.
 - [ ] **HEAD manipulation** — `git_repository_set_head` / `git_repository_set_head_detached`, branch switching.
 
