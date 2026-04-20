@@ -85,3 +85,19 @@ extension Index {
         }
     }
 }
+
+extension Index {
+    /// Stages the file at `path` (relative to the repository working
+    /// directory) into the index.
+    ///
+    /// - Parameter path: Path relative to the repository working directory.
+    ///   Forward slashes only, no leading separator.
+    /// - Throws: ``GitError`` — typically ``GitError/Code/notFound`` if the
+    ///   file doesn't exist, or a ``GitError/Class/repository`` error on a
+    ///   bare repository.
+    public func addPath(_ path: String) throws(GitError) {
+        try repository.lock.withLock { () throws(GitError) in
+            try check(path.withCString { git_index_add_bypath(handle, $0) })
+        }
+    }
+}
