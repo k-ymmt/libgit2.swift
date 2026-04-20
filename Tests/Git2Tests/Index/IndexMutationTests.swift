@@ -82,6 +82,28 @@ extension RuntimeSensitiveTests {
                 #expect(index.entries.isEmpty)
             }
         }
+
+        @Test
+        func save_persistsIndexAcrossRepoReopen() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                do {
+                    let repo = try initRepo(at: dir)
+                    let fileURL = dir.appendingPathComponent("persist.txt")
+                    try "persist\n".data(using: .utf8)!.write(to: fileURL)
+                    let index = try repo.index()
+                    try index.addPath("persist.txt")
+                    try index.save()
+                }
+                // Fresh Repository + fresh Index — forces libgit2 to re-read .git/index
+                let repo2 = try Repository.open(at: dir)
+                let index2 = try repo2.index()
+                try #require(index2.entries.count == 1)
+                #expect(index2.entries[0].path == "persist.txt")
+            }
+        }
     }
 }
 

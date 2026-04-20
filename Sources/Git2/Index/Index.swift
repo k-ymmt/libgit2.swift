@@ -113,3 +113,12 @@ extension Index {
         }
     }
 }
+
+extension Index {
+    /// Persists the in-memory index to the on-disk `.git/index` file.
+    public func save() throws(GitError) {
+        try repository.lock.withLock { () throws(GitError) in
+            try check(git_index_write(handle))
+        }
+    }
+}
