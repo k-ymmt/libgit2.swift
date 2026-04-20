@@ -85,3 +85,26 @@ extension Repository {
         }
     }
 }
+
+extension Repository {
+    /// Wraps `git_merge_commits`. libgit2 computes the merge base internally
+    /// (recursively when the commits have multiple bases). Returns a
+    /// possibly-conflicting ``Index`` without touching the working tree.
+    public func mergeCommits(
+        ours: Commit,
+        theirs: Commit,
+        options: MergeOptions = MergeOptions()
+    ) throws(GitError) -> Index {
+        try lock.withLock { () throws(GitError) -> Index in
+            try options.withCOptions { optsPtr throws(GitError) -> Index in
+                var out: OpaquePointer?
+                try check(git_merge_commits(
+                    &out, handle,
+                    ours.handle, theirs.handle,
+                    optsPtr
+                ))
+                return Index(handle: out!, repository: self)
+            }
+        }
+    }
+}
