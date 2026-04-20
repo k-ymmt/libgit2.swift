@@ -71,14 +71,34 @@ Non-blocking follow-ups identified while designing v0.4b-ii. Each is additive an
 - [ ] **Merge-flavored strategy flags.** `GIT_CHECKOUT_USE_OURS` / `USE_THEIRS` / `SKIP_UNMERGED`. v0.4b-ii deliberately omits them; they land with the merge / cherry-pick slice (v0.5+).
 - [ ] **`checkoutTree(_: Tag, options:)` overload.** libgit2 accepts a tag as a treeish, but v0.4b-ii's `checkoutTree` surfaces only the `Tree` and `Commit` overloads. Add when a concrete tag-checkout use case appears.
 - [ ] **`Repository.detachHead()`.** Sugar for `git_repository_detach_head` (detach HEAD from the current branch onto its tip). Replaceable today with `setHead(detachedAt: try repo.head().target)`; lands if the two-line version becomes a pattern.
-- [ ] **`setHead(detachedAtAnnotated:)`.** Wraps `git_repository_set_head_detached_from_annotated`. Valuable for richer reflog messages once annotated-commit handles are surfaced anywhere in the public API.
 - [ ] **Remote-branch switching.** `checkout(branchNamed:)` looks up `GIT_BRANCH_LOCAL` only. Add a `GIT_BRANCH_REMOTE` (or `GIT_BRANCH_ALL`) code path once remote-tracking use cases appear.
 - [ ] **Atomic branch-switch rollback.** `checkout(branch:)` runs `checkout_tree` → `set_head` inside one lock; libgit2 does not roll back if `set_head` fails after `checkout_tree` succeeds, and neither does the wrapper. A "remember old HEAD, restore on failure" layer is possible but complex (working-tree state is already mutated) and deferred until a concrete demand surfaces.
 - [ ] **Checkout FileMode integration coverage.** `.link` / `.commit` (submodule) round-trip through checkout. Same shape as the v0.4a `tree(entries:)` TODO — needs fixture-layer support before it is worth writing.
 - [ ] **Tighten `CheckoutHeadTests` error-code specificity.** `safeStrategyRefusesDirtyWorkdir` asserts only `e.class == .checkout`; `unbornHeadThrowsUnbornBranch` asserts only `e.code == .unbornBranch`. Add the mirrored assertion in each (observed libgit2 values, same shape as `bareRepoThrows`) so a future regression that drifts one without the other surfaces. Consistent with v0.3 / v0.4a / v0.4b-i error-code tightening follow-ups.
-- [ ] **Consolidate `initRepo(at:)` / `initBareRepo(at:)` test helpers.** The file-private `initRepo(at:)` shape is now duplicated across six test files (`IndexReadTests`, `IndexMutationTests`, `IndexWriteTreeTests`, `IndexConflictTests`, `IndexConcurrencyTests`, `CheckoutHeadTests`). Hoist into `Tests/Git2Tests/Support/` alongside `TestFixture` / `TemporaryDirectory`, and add a `initBareRepo(at:)` sibling so `CheckoutHeadTests.bareRepoThrows` (and any future bare-repo tests) can drop the inline `git_repository_init(..., is_bare = 1)` dance.
 - [ ] **Cosmetic `try repo.references()` warning.** `Repository.references()` is non-throwing, so `try` emits `"no calls to throwing functions occur within 'try' expression"`. Appears at least three times in `CheckoutBranchTests` (carried over from the plan verbatim) and likely in other suites that pre-date the non-throwing signature. Sweep across `Tests/Git2Tests/` and drop the redundant `try`.
 - [ ] **Reconsider `@testable import Git2` in Checkout tests.** `CheckoutHeadTests`, `CheckoutTreeTests`, `CheckoutIndexTests`, `CheckoutBranchTests`, `CheckoutConcurrencyTests` all use `@testable` even though every API they exercise is `public`. Matches other test files' convention, so not a blocker; revisit if we ever decide to trim `@testable` across the test target.
+
+## Deferred from v0.5a-i (merge / cherry-pick slice)
+
+Non-blocking follow-ups identified while designing v0.5a-i. Each is additive and non-breaking, and can be revisited when a concrete use case appears.
+
+- [ ] **`git_merge_file` / `_from_index`.** File-level 3-way merge with configurable drivers. Land when a UI or conflict-resolution use case needs sub-file control.
+- [ ] **`git_merge_bases` / `_bases_many` (plural).** Return all common ancestors, not just the single best one.
+- [ ] **`git_merge_analysis_for_ref`.** Analyze a merge into a non-HEAD ref.
+- [ ] **`git_annotated_commit_from_fetchhead`.** Lands with v0.5b remote support (fetchhead doesn't exist yet).
+- [ ] **`git_annotated_commit_from_revspec`.** Revspec is not yet a public surface; revisit if we expose revspec lookup.
+- [ ] **`MergeOptions` deeper fields.** `metric` (function pointer), `recursion_limit`, `default_driver`, `file_flags`.
+- [ ] **Octopus merge (`heads.count > 1`).** `merge(_ heads: [AnnotatedCommit], …)` rejects `heads.count != 1` today. The signature accepts an array for future compatibility.
+- [ ] **Auto-commit porcelain.** `git merge` style automatic merge-commit creation on the non-conflicting `.normal` path. Callers compose the existing `commit(parents: [our, their], …)` API themselves today.
+- [ ] **`abortMerge()` / `abortCherrypick()` convenience.** Composable via `cleanupState()` + `checkoutHead(strategy: .force)`; lands if the pattern repeats at call sites.
+- [ ] **Merge / cherry-pick callbacks (`notify_cb` / `progress_cb` / `perfdata_cb`).** Same bridging problem as v0.4b-ii's checkout callbacks.
+- [ ] **`Commit` / `Reference`-accepting merge / cherry-pick overloads.** v0.5a-i requires explicit `AnnotatedCommit`; convenience overloads can land additively later.
+- [ ] **Atomic rollback on porcelain merge.** Same trade-off as v0.4b-ii's `checkout(branch:)` — if `checkoutHead` fails after `setHead` succeeds on the fast-forward path, HEAD has moved but the working tree is stale. No Swift-layer rollback.
+- [ ] **`AnnotatedCommit` re-use.** Currently documented as single-use recommended. Formal re-use semantics are not pinned.
+- [ ] **Reflog-content assertions.** `SetHeadAnnotatedTests.refProvenance_landsInReflog` only checks that HEAD moves, because reflog inspection is not yet public surface. Tighten when reflog reads land.
+- [ ] **Porcelain `merge(_:Reference)` `.unborn` dispatch test.** The porcelain's `.unborn` branch (attach-HEAD + checkoutHead) is implemented but not covered by `MergePorcelainTests`. Task 11's `MergeAnalysisTests.unborn_whenHeadIsUnborn` covers the analysis return value but not the dispatch side-effects. Add when a concrete use case stress-tests it.
+- [ ] **`among_singleOID` naming.** Task 10 renamed the test to `among_singleOID_throwsUnknown` after discovering libgit2 1.9.x rejects single-OID `git_merge_base_many` calls. Revisit if a later libgit2 version accepts them and returns self.
+- [ ] **Redundant `try` on `repo.log(from:)` in `SetHeadAnnotatedTests.detachesHeadToOid`.** Shares the same "try on a non-throwing Sequence call" pattern already tracked in v0.4b-ii's TODO for `repo.references()`. Sweep together.
 
 ## Deferred from v0.3.0 (Swift wrapper read extensions)
 
@@ -107,10 +127,25 @@ Split into two slices. **v0.4b-i (index surface) is shipped** — see the spec u
 - [x] **Checkout** — `git_checkout_head` / `git_checkout_tree` / `git_checkout_index` with safety options.
 - [x] **HEAD manipulation** — `git_repository_set_head` / `git_repository_set_head_detached`, branch switching.
 
-### v0.5+ — network & advanced
+### v0.5 — network & advanced
+
+Split across multiple slices.
+
+#### v0.5a-i — merge / cherry-pick — shipped
+
+- [x] **Merge primitives** — `AnnotatedCommit` handle, `mergeBase(of:and:)` / `(among:)`, `mergeAnalysis(against:)`, `mergeTrees(...)` / `mergeCommits(...)`.
+- [x] **Stateful merge** — low-level `merge([AnnotatedCommit])` + porcelain `merge(_ branch:)` / `merge(branchNamed:)` with fast-forward dispatch.
+- [x] **Cherry-pick** — `cherrypick(_:)` (stateful) + `cherrypickCommit(_:onto:mainline:)` (pure).
+- [x] **Repository state** — `state`, `message()`, `removeMessage()`, `cleanupState()`.
+- [x] **Annotated HEAD** — `setHead(detachedAtAnnotated:)`. See the spec under `docs/superpowers/specs/2026-04-20-git2-v0.5a-i-merge-cherrypick-design.md`.
+
+#### v0.5a-ii — rebase
+
+- [ ] **Rebase** — `git_rebase_*` family. Stateful (resumable) handle; own spec.
+
+#### v0.5b — network
 
 - [ ] **Remote / fetch / push** (HTTPS). Callbacks for credentials surfaced to the user; no UI.
-- [ ] **Merge / rebase / cherry-pick**. Deep write operations with conflict handling.
 
 ### Potential future directions (unscoped)
 

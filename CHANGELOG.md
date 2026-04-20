@@ -15,6 +15,17 @@ Versioning follows SemVer with the usual `0.x` caveat: the API is not yet stable
 - `Repository.checkoutIndex(_: Index?, options:)` and `Index.checkout(options:)` sugar — wrap `git_checkout_index`.
 - `Repository.setHead(referenceName:)`, `Repository.setHead(detachedAt:)`, `Repository.setHead(to: Reference)`, and `Repository.setHead(to: Commit)`.
 - `Repository.checkout(branch:options:)` and `Repository.checkout(branchNamed:options:)` — high-level branch switching that runs `git_checkout_tree` + `git_repository_set_head` inside a single critical section. Non-branch references throw `.invalidSpec` / `.reference` before touching the working tree.
+- `AnnotatedCommit` — public handle wrapping `git_annotated_commit *`. Carries ref provenance (branch / FETCH_HEAD) that drives reflog messages.
+- `Repository.annotatedCommit(for: Reference)` / `(for: OID)` / `(from: Commit)` — three creation routes for `AnnotatedCommit`.
+- `Repository.MergeOptions` + `Flags: OptionSet` + `FileFavor: enum`, `Repository.CherrypickOptions`, `Repository.MergeAnalysis: OptionSet`, `Repository.MergePreference: enum`, `Repository.State: enum` — value types for merge / cherry-pick / state APIs.
+- `Repository.mergeBase(of:and:)` and `Repository.mergeBase(among:)` — wrap `git_merge_base` and `git_merge_base_many`.
+- `Repository.mergeAnalysis(against:)` — wraps `git_merge_analysis`. Returns `(MergeAnalysis, MergePreference)`.
+- `Repository.mergeTrees(ancestor:ours:theirs:options:)` and `Repository.mergeCommits(ours:theirs:options:)` — pure-calculation merges returning an `Index`.
+- `Repository.merge(_ heads: [AnnotatedCommit], mergeOptions:, checkoutOptions:)` (low-level) and `Repository.merge(_ branch: Reference, …)` / `Repository.merge(branchNamed:, …)` (porcelain — analyze → fast-forward / normal dispatch inside one critical section, returns the analysis bits). Low-level restricts `heads.count == 1` in v0.5a-i.
+- `Repository.cherrypick(_: Commit, options:)` (stateful) and `Repository.cherrypickCommit(_: Commit, onto: Commit, mainline:, mergeOptions:)` (pure calculation).
+- `Repository.state`, `Repository.message()`, `Repository.removeMessage()`, `Repository.cleanupState()` — repository-state introspection + cleanup.
+- `Repository.setHead(detachedAtAnnotated: AnnotatedCommit)` — wraps `git_repository_set_head_detached_from_annotated`, preserves ref provenance in the reflog.
+- `Commit.tree()` — wraps `git_commit_tree`. Resolves a commit's root tree. Added in Task 12 because the public API was missing despite being a natural extension.
 
 ## [0.2.0] — TBD
 
