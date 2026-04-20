@@ -160,6 +160,50 @@ extension TestFixture {
 }
 
 extension TestFixture {
+    /// Populates the repository's index with a synthetic three-way conflict
+    /// on `path`. Only non-nil sides are inserted, so modify/delete-style
+    /// conflicts are expressible by passing `nil` for one side.
+    ///
+    /// Uses libgit2 directly (`git_index_add` with stage-encoded flags)
+    /// because v0.4b-i does not expose a public API for writing stage 1/2/3
+    /// entries. Will migrate to the public Merge API once that slice lands
+    /// (tracked in TODO.md under "Deferred from v0.4b-i").
+    static func makeConflictedIndex(
+        at path: String,
+        ancestor: Data?,
+        ours: Data?,
+        theirs: Data?,
+        in directory: URL
+    ) throws {
+        let repo = try Repository.open(at: directory)
+        let index = try repo.index()
+
+        func insert(_ payload: Data, stage: UInt16) throws {
+            let blob = try repo.createBlob(data: payload)
+            let result: Int32 = try repo.lock.withLock { () throws(GitError) -> Int32 in
+                var entry = git_index_entry()
+                entry.mode = UInt32(GIT_FILEMODE_BLOB.rawValue)
+                entry.id = blob.raw
+                let mask = UInt16(GIT_INDEX_ENTRY_STAGEMASK)
+                let shift = UInt16(GIT_INDEX_ENTRY_STAGESHIFT)
+                entry.flags = (stage << shift) & mask
+                let r: Int32 = path.withCString { p in
+                    entry.path = p
+                    return git_index_add(index.handle, &entry)
+                }
+                return r
+            }
+            try check(result)
+        }
+
+        if let ancestor { try insert(ancestor, stage: 1) }
+        if let ours     { try insert(ours,     stage: 2) }
+        if let theirs   { try insert(theirs,   stage: 3) }
+        try index.save()
+    }
+}
+
+extension TestFixture {
     /// Writes an annotated tag pointing at `target`. Returns the annotated
     /// tag's OID.
     @discardableResult
