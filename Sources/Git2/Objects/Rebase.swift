@@ -74,3 +74,56 @@ extension Rebase {
         }
     }
 }
+
+extension Rebase {
+    /// Wraps `git_rebase_commit`. Commits the current patch.
+    ///
+    /// - Parameters:
+    ///   - author: the author for the rebased commit. Passing `nil` keeps
+    ///     the author of the original commit.
+    ///   - committer: the committer for the rebased commit. Required —
+    ///     identifies the rebaser.
+    ///   - message: the commit message. Passing `nil` keeps the original
+    ///     commit's message.
+    ///   - encoding: the message encoding, per libgit2's convention (`nil`
+    ///     keeps the original; `"UTF-8"` is the common explicit value).
+    /// - Throws:
+    ///   - ``GitError/Code/unmerged`` when the index still contains
+    ///     conflicts from the most recent ``next()``.
+    ///   - ``GitError/Code/applied`` when the current patch is already in
+    ///     `upstream` and there is nothing to commit.
+    @discardableResult
+    public func commit(
+        author: Signature? = nil,
+        committer: Signature,
+        message: String? = nil,
+        encoding: String? = nil
+    ) throws(GitError) -> OID {
+        try repository.lock.withLock { () throws(GitError) -> OID in
+            let authorHandle: UnsafeMutablePointer<git_signature>?
+            if let author {
+                authorHandle = try repository.signatureHandle(for: author)
+            } else {
+                authorHandle = nil
+            }
+            defer { if let h = authorHandle { git_signature_free(h) } }
+
+            let committerHandle = try repository.signatureHandle(for: committer)
+            defer { git_signature_free(committerHandle) }
+
+            var newOID = git_oid()
+            let result: Int32 = try withOptionalCString(encoding) { encPtr throws(GitError) -> Int32 in
+                try withOptionalCString(message) { msgPtr throws(GitError) -> Int32 in
+                    git_rebase_commit(
+                        &newOID,
+                        handle,
+                        authorHandle, committerHandle,
+                        encPtr, msgPtr
+                    )
+                }
+            }
+            try check(result)
+            return OID(raw: newOID)
+        }
+    }
+}
