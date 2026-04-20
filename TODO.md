@@ -62,6 +62,20 @@ Non-blocking follow-ups identified while designing v0.4b-i. Each is additive and
 - [ ] **Tighten error-code specificity in Index failure tests.** `IndexMutationTests.addPath_missingFileThrowsNotFound` / `addPath_onBareRepoThrows` and `IndexConflictTests.writeTree_onConflictedIndexThrows` currently assert `throws: GitError.self`. Spec §9.2 calls for `error.code == .notFound` / `error.class == .repository` / `error.code == .unmerged` assertions. Mechanical tightening, same polish as v0.3's follow-up on `invalidSpec`.
 - [ ] **Clarify `_ = repo` in `IndexConflictTests.makeConflictedIndex_populatesThreeStages`.** The throwaway assignment exists to make the init side-effects (`.git/` directory on disk) explicit while discarding the unused `Repository` handle. Either inline as `_ = try initRepo(at: dir)` or add a comment explaining why the handle is created but not used.
 
+## Deferred from v0.4b-ii (checkout / HEAD slice)
+
+Non-blocking follow-ups identified while designing v0.4b-ii. Each is additive and non-breaking, and can be revisited when a concrete use case appears.
+
+- [ ] **Checkout callbacks.** `notify_cb` / `progress_cb` / `perfdata_cb`. Bridging Swift closures to C callbacks (context pointer lifetime, cancellation propagation) is its own implementation surface. Land when a concrete UI requirement appears.
+- [ ] **`CheckoutOptions` fields not surfaced.** `baseline`, `baseline_index`, `target_directory`, `ancestor_label` / `our_label` / `their_label`, `dir_mode`, `file_mode`, `file_open_flags`, `disable_filters`. `baseline` in particular deserves a second look during the merge slice so conflict detection gets more precise context.
+- [ ] **Merge-flavored strategy flags.** `GIT_CHECKOUT_USE_OURS` / `USE_THEIRS` / `SKIP_UNMERGED`. v0.4b-ii deliberately omits them; they land with the merge / cherry-pick slice (v0.5+).
+- [ ] **`checkoutTree(_: Tag, options:)` overload.** libgit2 accepts a tag as a treeish, but v0.4b-ii's `checkoutTree` surfaces only the `Tree` and `Commit` overloads. Add when a concrete tag-checkout use case appears.
+- [ ] **`Repository.detachHead()`.** Sugar for `git_repository_detach_head` (detach HEAD from the current branch onto its tip). Replaceable today with `setHead(detachedAt: try repo.head().target)`; lands if the two-line version becomes a pattern.
+- [ ] **`setHead(detachedAtAnnotated:)`.** Wraps `git_repository_set_head_detached_from_annotated`. Valuable for richer reflog messages once annotated-commit handles are surfaced anywhere in the public API.
+- [ ] **Remote-branch switching.** `checkout(branchNamed:)` looks up `GIT_BRANCH_LOCAL` only. Add a `GIT_BRANCH_REMOTE` (or `GIT_BRANCH_ALL`) code path once remote-tracking use cases appear.
+- [ ] **Atomic branch-switch rollback.** `checkout(branch:)` runs `checkout_tree` → `set_head` inside one lock; libgit2 does not roll back if `set_head` fails after `checkout_tree` succeeds, and neither does the wrapper. A "remember old HEAD, restore on failure" layer is possible but complex (working-tree state is already mutated) and deferred until a concrete demand surfaces.
+- [ ] **Checkout FileMode integration coverage.** `.link` / `.commit` (submodule) round-trip through checkout. Same shape as the v0.4a `tree(entries:)` TODO — needs fixture-layer support before it is worth writing.
+
 ## Deferred from v0.3.0 (Swift wrapper read extensions)
 
 - [ ] **`RevWalk.next()` holds the lock across `git_commit_lookup`.** The closure passed to `repository.lock.withLock` does (a) `git_revwalk_next` and (b) `git_commit_lookup` back-to-back. No deadlock in practice (the standard `while let c = try walk.next()` loop releases the lock between calls), but it serializes the lookup against every other repo operation and is a future trap if the lookup grows side effects. Worth revisiting when introducing additional throwing APIs that want to call into the public surface mid-walk.
