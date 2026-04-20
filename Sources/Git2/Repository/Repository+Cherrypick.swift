@@ -28,3 +28,24 @@ extension Repository {
         }
     }
 }
+
+extension Repository {
+    /// Wraps `git_cherrypick`. Applies `commit` on top of HEAD, writing
+    /// `CHERRY_PICK_HEAD`, updating the index, and updating the working
+    /// tree. Does **not** create the final commit — callers compose the
+    /// v0.4a ``Repository/commit(tree:parents:author:committer:message:messageEncoding:updatingRef:)``
+    /// API themselves after resolving any conflicts.
+    ///
+    /// Conflicts surface via the index (``Index/hasConflicts``,
+    /// ``Index/conflicts``) and ``Repository/state``, not as Swift errors.
+    public func cherrypick(
+        _ commit: Commit,
+        options: CherrypickOptions = CherrypickOptions()
+    ) throws(GitError) {
+        try lock.withLock { () throws(GitError) in
+            try options.withCOptions { optsPtr throws(GitError) in
+                try check(git_cherrypick(handle, commit.handle, optsPtr))
+            }
+        }
+    }
+}
