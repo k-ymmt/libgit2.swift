@@ -37,6 +37,20 @@ extension Repository {
 }
 
 extension Repository {
+    /// Wraps `git_repository_set_head_detached_from_annotated`. Preserves
+    /// ref provenance in the reflog — the reflog shows the branch or
+    /// `FETCH_HEAD` the commit came from, not just an OID.
+    ///
+    /// Takes the lock once and calls libgit2 directly — does **not** delegate
+    /// to ``setHead(detachedAt:)`` so a reentrant `withLock` cannot occur.
+    public func setHead(detachedAtAnnotated commit: AnnotatedCommit) throws(GitError) {
+        try lock.withLock { () throws(GitError) in
+            try check(git_repository_set_head_detached_from_annotated(handle, commit.handle))
+        }
+    }
+}
+
+extension Repository {
     /// Sugar for ``setHead(referenceName:)`` using `reference.name`.
     ///
     /// Takes the lock once and calls libgit2 directly — does **not** delegate
