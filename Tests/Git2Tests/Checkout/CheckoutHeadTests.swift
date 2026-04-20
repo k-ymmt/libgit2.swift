@@ -1,7 +1,6 @@
 import Testing
 import Foundation
 @testable import Git2
-import Cgit2
 
 extension RuntimeSensitiveTests {
     @Suite(.serialized)
@@ -104,14 +103,7 @@ extension RuntimeSensitiveTests {
             defer { try? Git.shutdown() }
 
             try withTemporaryDirectory { dir in
-                var raw: OpaquePointer?
-                let r: Int32 = dir.withUnsafeFileSystemRepresentation { path in
-                    guard let path else { return -1 }
-                    return git_repository_init(&raw, path, /* is_bare */ 1)
-                }
-                guard r == 0, let raw else { throw GitError.fromLibgit2(r) }
-                git_repository_free(raw)
-                let repo = try Repository.open(at: dir)
+                let repo = try initBareRepo(at: dir)
                 do {
                     try repo.checkoutHead(options: Repository.CheckoutOptions(strategy: [.force]))
                     Issue.record("expected GitError on bare repo")
@@ -125,15 +117,4 @@ extension RuntimeSensitiveTests {
             }
         }
     }
-}
-
-private func initRepo(at dir: URL) throws -> Repository {
-    var raw: OpaquePointer?
-    let r: Int32 = dir.withUnsafeFileSystemRepresentation { path in
-        guard let path else { return -1 }
-        return git_repository_init(&raw, path, 0)
-    }
-    guard r == 0, let raw else { throw GitError.fromLibgit2(r) }
-    git_repository_free(raw)
-    return try Repository.open(at: dir)
 }
