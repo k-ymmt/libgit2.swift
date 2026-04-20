@@ -157,3 +157,64 @@ extension Index {
         }
     }
 }
+
+extension Index {
+    /// A point-in-time snapshot of every conflicting path in the index.
+    public var conflicts: [IndexConflict] {
+        repository.lock.withLock {
+            var iter: OpaquePointer?
+            guard git_index_conflict_iterator_new(&iter, handle) == 0,
+                  let iter else {
+                return []
+            }
+            defer { git_index_conflict_iterator_free(iter) }
+
+            var out: [IndexConflict] = []
+            while true {
+                var a: UnsafePointer<git_index_entry>?
+                var o: UnsafePointer<git_index_entry>?
+                var t: UnsafePointer<git_index_entry>?
+                let rc = git_index_conflict_next(&a, &o, &t, iter)
+                if rc == GIT_ITEROVER.rawValue { break }
+                if rc < 0 { break }   // unexpected; surface as empty end-of-iteration
+                let path = [a, o, t].compactMap { $0 }
+                    .map { String(cString: $0.pointee.path) }
+                    .first ?? ""
+                out.append(IndexConflict(
+                    path: path,
+                    ancestor: a.map(IndexEntry.init),
+                    ours:     o.map(IndexEntry.init),
+                    theirs:   t.map(IndexEntry.init)
+                ))
+            }
+            return out
+        }
+    }
+
+    /// Looks up the three-way conflict for a single path.
+    ///
+    /// - Returns: An ``IndexConflict`` with the non-nil sides libgit2 has on
+    ///   record, or `nil` if `path` has no conflict.
+    public func conflict(for path: String) -> IndexConflict? {
+        return repository.lock.withLock {
+            var a: UnsafePointer<git_index_entry>?
+            var o: UnsafePointer<git_index_entry>?
+            var t: UnsafePointer<git_index_entry>?
+            let rc = path.withCString { p in
+                git_index_conflict_get(&a, &o, &t, handle, p)
+            }
+            if rc == GIT_ENOTFOUND.rawValue { return nil }
+            if rc != 0 {
+                preconditionFailure(
+                    "git_index_conflict_get returned unexpected code \(rc)"
+                )
+            }
+            return IndexConflict(
+                path: path,
+                ancestor: a.map(IndexEntry.init),
+                ours:     o.map(IndexEntry.init),
+                theirs:   t.map(IndexEntry.init)
+            )
+        }
+    }
+}

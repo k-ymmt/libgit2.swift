@@ -26,6 +26,78 @@ extension RuntimeSensitiveTests {
                 #expect(index.hasConflicts)
             }
         }
+
+        @Test
+        func conflicts_enumeratesAllSides() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                _ = try initRepo(at: dir)
+                try TestFixture.makeConflictedIndex(
+                    at: "c.txt",
+                    ancestor: Data("A".utf8),
+                    ours: Data("O".utf8),
+                    theirs: Data("T".utf8),
+                    in: dir
+                )
+                let repo = try Repository.open(at: dir)
+                let index = try repo.index()
+                let conflicts = index.conflicts
+                try #require(conflicts.count == 1)
+                #expect(conflicts[0].path == "c.txt")
+                #expect(conflicts[0].ancestor?.stage == .ancestor)
+                #expect(conflicts[0].ours?.stage == .ours)
+                #expect(conflicts[0].theirs?.stage == .theirs)
+            }
+        }
+
+        @Test
+        func conflictFor_hitAndMiss() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                _ = try initRepo(at: dir)
+                try TestFixture.makeConflictedIndex(
+                    at: "c.txt",
+                    ancestor: Data("A".utf8),
+                    ours: Data("O".utf8),
+                    theirs: nil,
+                    in: dir
+                )
+                let repo = try Repository.open(at: dir)
+                let index = try repo.index()
+                let hit = index.conflict(for: "c.txt")
+                try #require(hit != nil)
+                #expect(hit!.ancestor != nil)
+                #expect(hit!.ours != nil)
+                #expect(hit!.theirs == nil)
+                #expect(index.conflict(for: "nonexistent") == nil)
+            }
+        }
+
+        @Test
+        func writeTree_onConflictedIndexThrows() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                _ = try initRepo(at: dir)
+                try TestFixture.makeConflictedIndex(
+                    at: "c.txt",
+                    ancestor: Data("A".utf8),
+                    ours: Data("O".utf8),
+                    theirs: Data("T".utf8),
+                    in: dir
+                )
+                let repo = try Repository.open(at: dir)
+                let index = try repo.index()
+                #expect(throws: GitError.self) {
+                    _ = try index.writeTree()
+                }
+            }
+        }
     }
 }
 
