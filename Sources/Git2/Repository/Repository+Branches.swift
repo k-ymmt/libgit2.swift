@@ -30,7 +30,8 @@ extension Repository {
     /// libgit2 refuses to delete the branch currently checked out through HEAD.
     ///
     /// - Throws: ``GitError`` — ``GitError/Code/notFound`` if the branch does
-    ///   not exist.
+    ///   not exist; also throws if `name` refers to the currently checked-out
+    ///   branch (exact error code is libgit2 version-dependent).
     public func deleteBranch(named name: String) throws(GitError) {
         try lock.withLock { () throws(GitError) in
             var ref: OpaquePointer?
