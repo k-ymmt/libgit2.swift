@@ -100,6 +100,23 @@ Non-blocking follow-ups identified while designing v0.5a-i. Each is additive and
 - [ ] **`among_singleOID` naming.** Task 10 renamed the test to `among_singleOID_throwsUnknown` after discovering libgit2 1.9.x rejects single-OID `git_merge_base_many` calls. Revisit if a later libgit2 version accepts them and returns self.
 - [ ] **Redundant `try` on `repo.log(from:)` in `SetHeadAnnotatedTests.detachesHeadToOid`.** Shares the same "try on a non-throwing Sequence call" pattern already tracked in v0.4b-ii's TODO for `repo.references()`. Sweep together.
 
+## Deferred from v0.5a-ii (rebase slice)
+
+Non-blocking follow-ups identified while implementing v0.5a-ii. Each is additive and non-breaking, and can be revisited when a concrete use case appears.
+
+- [ ] **Rebase callbacks (`commit_create_cb` / `signing_cb`).** Swift-closure-to-C-function-pointer bridging (context pointer lifetime, cancellation propagation, typed-throws leakage). Same shape as v0.4b-ii's checkout callbacks and v0.5a-i's merge callbacks; better handled as one unified slice. `signing_cb` is additionally deprecated in libgit2.
+- [ ] **`Commit` / `Reference`-accepting `startRebase` overloads.** v0.5a-ii requires explicit `AnnotatedCommit`; convenience overloads can land additively.
+- [ ] **Porcelain `rebase(onto:)` with auto-continue.** Higher-level "apply the whole rebase, surface conflicts once at the end" wrapper around `startRebase` + `next` / `commit` loop.
+- [ ] **`abortRebase()` convenience on `Repository`.** Composable via `openRebase()` + `rebase.abort()` today.
+- [ ] **Interactive rebase todo-list editing.** libgit2 does not publish a public `rebase-todo` editing API; v0.5a-ii surfaces the operation list for inspection only.
+- [ ] **Cross-process rebase resume fidelity test.** `openRebase()` is exercised single-process (start → drop handle → open). Running `git rebase` from a shell and `openRebase()` from Swift in separate processes would raise coverage; skipped because the CI shape is messy.
+- [ ] **Atomic rollback mid-`commit()`.** If a `commit()` is interrupted, `.git/rebase-merge/` is whatever libgit2 left — recovery is via `openRebase()` + `abort()` in a later session. Same trade-off as v0.5a-i §4.8.
+- [ ] **FileMode integration coverage for `.link` / `.commit` through rebase.** Same shape as the v0.4a / v0.4b-ii / v0.5a-i deferred items — surfaces once the fixture layer supports those filemodes more conveniently.
+- [ ] **`Rebase` handle-consumed guard.** `finish()` / `abort()` tear down the repository-side state but the Swift handle stays live until deinit; subsequent calls pass through libgit2's (actually idempotent in 1.9.x — not erroring) behavior. A `consuming func` or state-machine guard could reject the second call at the Swift layer — deferred because it diverges from every other handle class's "thin wrapper" convention.
+- [ ] **`ontoName` / `origHeadName` asymmetry.** libgit2 strips `refs/heads/` from `git_rebase_onto_name` but keeps the full canonical path in `git_rebase_orig_head_name`. v0.5a-ii surfaces libgit2's behavior unchanged. Normalizing this at the Swift layer (e.g. always returning the canonical form) would diverge from the spec's "thin wrapper" policy; revisit if the asymmetry becomes a UX issue.
+- [ ] **`withTemporaryDirectoryAsync` hoist.** `CheckoutConcurrencyTests.swift`, `MergeConcurrencyTests.swift`, and `RebaseConcurrencyTests.swift` each define their own private copy. Hoist trigger (three duplicates) is already met; pull into `Tests/Git2Tests/Support/` on the next sweep.
+- [ ] **`RebaseConcurrencyTests` sanity assertion.** The parallel test currently only asserts "doesn't crash"; adding `#expect(rebase.operationCount == 3)` after the task group would tighten the guarantee that metadata reads still return correct values under contention.
+
 ## Deferred from v0.3.0 (Swift wrapper read extensions)
 
 - [ ] **`RevWalk.next()` holds the lock across `git_commit_lookup`.** The closure passed to `repository.lock.withLock` does (a) `git_revwalk_next` and (b) `git_commit_lookup` back-to-back. No deadlock in practice (the standard `while let c = try walk.next()` loop releases the lock between calls), but it serializes the lookup against every other repo operation and is a future trap if the lookup grows side effects. Worth revisiting when introducing additional throwing APIs that want to call into the public surface mid-walk.
@@ -139,9 +156,9 @@ Split across multiple slices.
 - [x] **Repository state** — `state`, `message()`, `removeMessage()`, `cleanupState()`.
 - [x] **Annotated HEAD** — `setHead(detachedAtAnnotated:)`. See the spec under `docs/superpowers/specs/2026-04-20-git2-v0.5a-i-merge-cherrypick-design.md`.
 
-#### v0.5a-ii — rebase
+##### v0.5a-ii — rebase — shipped
 
-- [ ] **Rebase** — `git_rebase_*` family. Stateful (resumable) handle; own spec.
+- [x] **Rebase handle** — `git_rebase_init` / `git_rebase_open`, `Rebase.next()` / `.commit()` iteration, `finish()` / `abort()` termination, metadata (`operationCount` / `currentOperationIndex` / `operation(at:)` / `origHeadName` / `origHeadOid` / `ontoName` / `ontoOid`), in-memory mode + `inMemoryIndex()`, `RebaseOptions`. See the spec under `docs/superpowers/specs/2026-04-20-git2-v0.5a-ii-rebase-design.md`.
 
 #### v0.5b — network
 

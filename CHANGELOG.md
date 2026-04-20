@@ -26,6 +26,14 @@ Versioning follows SemVer with the usual `0.x` caveat: the API is not yet stable
 - `Repository.state`, `Repository.message()`, `Repository.removeMessage()`, `Repository.cleanupState()` — repository-state introspection + cleanup.
 - `Repository.setHead(detachedAtAnnotated: AnnotatedCommit)` — wraps `git_repository_set_head_detached_from_annotated`, preserves ref provenance in the reflog.
 - `Commit.tree()` — wraps `git_commit_tree`. Resolves a commit's root tree. Added in Task 12 because the public API was missing despite being a natural extension.
+- `Rebase` — public handle wrapping `git_rebase *`. Produced by `Repository.startRebase(...)` or `Repository.openRebase(...)`. Frees the underlying handle in `deinit`.
+- `Repository.startRebase(branch:upstream:onto:options:)` — wraps `git_rebase_init`. All three `AnnotatedCommit` arguments are optional (libgit2 nullable semantics).
+- `Repository.openRebase(options:)` — wraps `git_rebase_open`. Resumes a rebase started by this or another process.
+- `Rebase.next() -> RebaseOperation?` / `Rebase.commit(author:committer:message:encoding:) -> OID` — per-step iteration and confirmation. `next()` returns `nil` at the end of the operation list (libgit2 `GIT_ITEROVER` translated to `Optional.none`). `commit` takes `author: nil` / `message: nil` to preserve the original commit's fields.
+- `Rebase.finish(signature:)` / `Rebase.abort()` — terminate the rebase. `abort` restores the working tree with an implicit `GIT_CHECKOUT_FORCE`.
+- `Rebase.operationCount`, `Rebase.currentOperationIndex`, `Rebase.operation(at:)`, `Rebase.origHeadName`, `Rebase.origHeadOid`, `Rebase.ontoName`, `Rebase.ontoOid` — metadata accessors over `git_rebase_operation_entrycount` / `_current` / `_byindex` / `_orig_head_*` / `_onto_*`.
+- `Rebase.inMemoryIndex() -> Index` — wraps `git_rebase_inmemory_index`. Only valid on a rebase started with `RebaseOptions.inMemory = true`.
+- `Repository.RebaseOptions` + `RebaseOperation` (`struct`) + `RebaseOperation.Kind` (`enum`) — value types for rebase configuration and operation-list inspection.
 
 ## [0.2.0] — TBD
 
