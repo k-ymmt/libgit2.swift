@@ -59,6 +59,8 @@ Non-blocking follow-ups identified while designing v0.4b-i. Each is additive and
 - [ ] **Extended `IndexEntry` stat fields.** `mtime`, `ctime`, `fileSize`, `uid`, `gid`, `dev`, `ino`, `flags_extended`. Surface when a stat-based diff or working-tree-dirty-detection API is added.
 - [ ] **Lazy iteration.** `Index.lazyEntries() -> some Sequence<IndexEntry>` / `lazyConflicts() -> some Sequence<IndexConflict>`. v0.4b-i returns Array snapshots. Add only if a concrete performance pressure appears.
 - [ ] **`TestFixture.makeConflictedIndex` migration off `Cgit2`.** v0.4b-i constructs synthetic 3-way conflicts via `git_index_add` with stage-encoded flags because no public API accepts stage-carrying entries yet. Replace with a public Merge-API-based helper once that slice lands.
+- [ ] **Tighten error-code specificity in Index failure tests.** `IndexMutationTests.addPath_missingFileThrowsNotFound` / `addPath_onBareRepoThrows` and `IndexConflictTests.writeTree_onConflictedIndexThrows` currently assert `throws: GitError.self`. Spec §9.2 calls for `error.code == .notFound` / `error.class == .repository` / `error.code == .unmerged` assertions. Mechanical tightening, same polish as v0.3's follow-up on `invalidSpec`.
+- [ ] **Clarify `_ = repo` in `IndexConflictTests.makeConflictedIndex_populatesThreeStages`.** The throwaway assignment exists to make the init side-effects (`.git/` directory on disk) explicit while discarding the unused `Repository` handle. Either inline as `_ = try initRepo(at: dir)` or add a comment explaining why the handle is created but not used.
 
 ## Deferred from v0.3.0 (Swift wrapper read extensions)
 
