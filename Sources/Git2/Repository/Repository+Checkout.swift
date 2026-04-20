@@ -60,3 +60,20 @@ extension Repository {
         }
     }
 }
+
+extension Repository {
+    /// Updates the working tree to match `index`. Pass `nil` (the default)
+    /// to use the repository's current index. Equivalent to
+    /// `git_checkout_index` — where a `NULL` `index` argument means "use the
+    /// repo's cached index".
+    public func checkoutIndex(
+        _ index: Index? = nil,
+        options: CheckoutOptions = CheckoutOptions()
+    ) throws(GitError) {
+        try lock.withLock { () throws(GitError) in
+            try options.withCOptions { optsPtr throws(GitError) in
+                try check(git_checkout_index(handle, index?.handle, optsPtr))
+            }
+        }
+    }
+}
