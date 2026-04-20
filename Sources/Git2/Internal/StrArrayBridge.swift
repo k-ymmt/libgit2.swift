@@ -1,5 +1,5 @@
 import Cgit2
-import Foundation   // re-exports Darwin's strdup / free on Apple platforms
+import Darwin   // strdup / free
 
 /// Invokes `body` with a `git_strarray *` view of `paths` — or `nil` if
 /// `paths` is empty (libgit2 treats a `NULL` strarray as "all paths").
