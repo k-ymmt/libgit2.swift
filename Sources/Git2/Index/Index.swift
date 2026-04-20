@@ -137,3 +137,23 @@ extension Index {
         }
     }
 }
+
+extension Index {
+    /// Writes a tree object to the ODB from the current index state and
+    /// returns a ``Tree`` handle for it.
+    ///
+    /// Does **not** modify the on-disk `.git/index`. Call ``save()``
+    /// separately if you want the current in-memory index persisted.
+    ///
+    /// - Throws: ``GitError`` — surfaces libgit2's `.unmerged` / index-dirty
+    ///   errors if the index has conflicts or other unwritable state.
+    public func writeTree() throws(GitError) -> Tree {
+        try repository.lock.withLock { () throws(GitError) -> Tree in
+            var oid = git_oid()
+            try check(git_index_write_tree(&oid, handle))
+            var treeHandle: OpaquePointer?
+            try check(git_tree_lookup(&treeHandle, repository.handle, &oid))
+            return Tree(handle: treeHandle!, repository: repository)
+        }
+    }
+}
