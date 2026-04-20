@@ -113,5 +113,21 @@ extension RuntimeSensitiveTests {
                 #expect(try repo.reference(named: "refs/tags/v1") == nil)
             }
         }
+
+        @Test
+        func deleteTagOnMissingThrowsNotFound() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let (repo, _) = try makeRepoWithInitialCommit(dir)
+                do {
+                    try repo.deleteTag(named: "nonexistent")
+                    Issue.record("expected .notFound")
+                } catch let error as GitError {
+                    #expect(error.code == .notFound)
+                }
+            }
+        }
     }
 }

@@ -16,16 +16,19 @@ extension Repository {
     ) throws(GitError) -> Reference {
         try lock.withLock { () throws(GitError) -> Reference in
             var oid = git_oid()
-            let rCreate: Int32 = name.withCString { namePtr in
+            let result: Int32 = name.withCString { namePtr in
                 git_tag_create_lightweight(&oid, handle, namePtr, target.handle, force ? 1 : 0)
             }
-            try check(rCreate)
+            try check(result)
 
+            // Name already passed git_tag_create_lightweight validation above,
+            // so the derived "refs/tags/<name>" is guaranteed to be a valid
+            // refspec and the lookup will succeed.
             var ref: OpaquePointer?
-            let rLookup: Int32 = "refs/tags/\(name)".withCString { full in
+            let resultLookup: Int32 = "refs/tags/\(name)".withCString { full in
                 git_reference_lookup(&ref, handle, full)
             }
-            try check(rLookup)
+            try check(resultLookup)
             return Reference(handle: ref!, repository: self)
         }
     }
@@ -74,7 +77,8 @@ extension Repository {
     /// behavior — GC will prune it).
     ///
     /// - Throws: ``GitError`` — ``GitError/Code/notFound`` if the tag does not
-    ///   exist.
+    ///   exist; other ``GitError`` codes for repository or filesystem issues
+    ///   surfaced by libgit2.
     public func deleteTag(named name: String) throws(GitError) {
         try lock.withLock { () throws(GitError) in
             let result: Int32 = name.withCString { namePtr in
