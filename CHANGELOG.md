@@ -7,6 +7,15 @@ Versioning follows SemVer with the usual `0.x` caveat: the API is not yet stable
 
 ## [Unreleased]
 
+### Added
+
+- `Repository.CheckoutOptions` + `Strategy` (`OptionSet`) — strategy flags mirroring `git_checkout_strategy_t`, plus `paths` pathspec list.
+- `Repository.checkoutHead(options:)` — wraps `git_checkout_head`.
+- `Repository.checkoutTree(_: Tree, options:)` and `Repository.checkoutTree(_: Commit, options:)` overloads — wrap `git_checkout_tree`.
+- `Repository.checkoutIndex(_: Index?, options:)` and `Index.checkout(options:)` sugar — wrap `git_checkout_index`.
+- `Repository.setHead(referenceName:)`, `Repository.setHead(detachedAt:)`, `Repository.setHead(to: Reference)`, and `Repository.setHead(to: Commit)`.
+- `Repository.checkout(branch:options:)` and `Repository.checkout(branchNamed:options:)` — high-level branch switching that runs `git_checkout_tree` + `git_repository_set_head` inside a single critical section. Non-branch references throw `.invalidSpec` / `.reference` before touching the working tree.
+
 ## [0.2.0] — TBD
 
 First release with a real Swift API layer over `Cgit2`. v0.1.0 shipped only the
