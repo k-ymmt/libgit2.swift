@@ -29,4 +29,24 @@ struct MergeOptionsTests {
         #expect(cases.count == 4)
         #expect(cases == cases)
     }
+
+    @Test
+    func cherrypickOptionsDefaults() {
+        let opts = Repository.CherrypickOptions()
+        #expect(opts.mainline == 0)
+        #expect(opts.merge == Repository.MergeOptions())
+        #expect(opts.checkout == Repository.CheckoutOptions())
+    }
+
+    @Test
+    func cherrypickOptionsCustom() {
+        let opts = Repository.CherrypickOptions(
+            mainline: 1,
+            merge: Repository.MergeOptions(flags: [.findRenames], fileFavor: .theirs),
+            checkout: Repository.CheckoutOptions(strategy: [.force])
+        )
+        #expect(opts.mainline == 1)
+        #expect(opts.merge.fileFavor == .theirs)
+        #expect(opts.checkout.strategy == [.force])
+    }
 }
