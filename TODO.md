@@ -41,6 +41,18 @@ Items deferred from the v0.1.0 XCFramework implementation.
 - [x] **README.md** with SwiftPM snippet + quick-start (landed pre-release; the earlier "README" item in this file is now obsolete).
 - [ ] **LICENSE file.** README references it; add before tagging if possible.
 
+## Deferred from v0.4a (ODB write foundation)
+
+Non-blocking follow-ups identified while designing v0.4a. Each is an additive, non-breaking API and can be revisited when a concrete use case appears.
+
+- [ ] **Stateful `TreeBuilder` class.** Public handle with `insert(name:oid:filemode:)` / `remove(name:)` / `derived(from: Tree)` / `write() -> Tree`. v0.4a ships a flat `Repository.tree(entries:)` only; differential builds and "take an existing tree and tweak one entry" land here.
+- [ ] **`createBlob(fromFileAt: URL)` / streaming blob creation.** v0.4a takes `Data` only.
+- [ ] **Tag of non-commit target.** `target: Object` overloads on `createLightweightTag` / `createAnnotatedTag` for tag-of-tag / tag-of-tree use cases. v0.4a restricts `target` to `Commit`.
+- [ ] **Remote branch creation / deletion** (`GIT_BRANCH_REMOTE`). v0.4a is `GIT_BRANCH_LOCAL` only.
+- [ ] **Signed commits** — `commit(...)` overload wrapping `git_commit_create_with_signature`.
+- [ ] **`message_encoding:` parameter** on `commit(...)`. v0.4a passes `nil` to libgit2 (treat as UTF-8).
+- [ ] **TestFixture `TreeEntryDescription` migration.** v0.4a leaves `TreeEntryDescription.mode` as `git_filemode_t`; swap it for the public `TreeEntry.FileMode` to drop the final `@testable` `Cgit2` dependency from the fixture layer.
+
 ## Deferred from v0.3.0 (Swift wrapper read extensions)
 
 - [ ] **`RevWalk.next()` holds the lock across `git_commit_lookup`.** The closure passed to `repository.lock.withLock` does (a) `git_revwalk_next` and (b) `git_commit_lookup` back-to-back. No deadlock in practice (the standard `while let c = try walk.next()` loop releases the lock between calls), but it serializes the lookup against every other repo operation and is a future trap if the lookup grows side effects. Worth revisiting when introducing additional throwing APIs that want to call into the public surface mid-walk.
@@ -67,11 +79,23 @@ implementation.
 
 ### v0.4 — write operations
 
-- [ ] **Commit creation** — `Repository.commit(tree:parents:author:committer:message:)` or similar. Replaces the test-only `TestFixture` builder with a real public API.
-- [ ] **Branch creation / deletion**.
-- [ ] **Tag creation / deletion** (lightweight and annotated).
-- [ ] **Index / staging** — `git_index_*` wrapper.
-- [ ] **HEAD manipulation** — checkout, branch switching.
+Split into two slices. v0.4a covers the ODB-write surface (blob / tree / commit creation, branch + tag create/delete, generic reference delete). v0.4b covers the filesystem-touching surface (index, checkout, HEAD manipulation). See the v0.4a spec under `docs/superpowers/specs/2026-04-20-git2-v0.4a-write-foundation-design.md`.
+
+#### v0.4a — ODB write foundation
+
+- [ ] **Blob creation** — `Repository.createBlob(data:) -> OID`.
+- [ ] **Tree construction (flat)** — `Repository.tree(entries:) -> Tree` with a `TreeBuilderEntry` snapshot value.
+- [ ] **Commit creation** — `Repository.commit(tree:parents:author:committer:message:updatingRef:)`. Replaces the test-only `TestFixture` builder with a real public API.
+- [ ] **Branch creation / deletion** — `Repository.createBranch(named:at:force:)` / `Repository.deleteBranch(named:)`. Local branches only.
+- [ ] **Tag creation / deletion** — split `createLightweightTag` / `createAnnotatedTag` + `deleteTag(named:)`. `target: Commit` only.
+- [ ] **Generic reference delete** — `Reference.delete()` for non-branch / non-tag refs.
+- [ ] **TestFixture rewrite** — delegate `makeLinearHistory` / `makeMergeHistory` / `makeCommitWithTree` / `makeBranches` / `makeAnnotatedTag` to the new public API; drop the libgit2-direct paths where possible.
+
+#### v0.4b — index, checkout, HEAD
+
+- [ ] **Index / staging** — `git_index_*` wrapper (read, add, remove, write, conflict enumeration).
+- [ ] **Checkout** — `git_checkout_head` / `git_checkout_tree` / `git_checkout_index` with safety options.
+- [ ] **HEAD manipulation** — `git_repository_set_head` / `git_repository_set_head_detached`, branch switching.
 
 ### v0.5+ — network & advanced
 
