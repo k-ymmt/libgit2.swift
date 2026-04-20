@@ -36,3 +36,23 @@ extension Index {
         }
     }
 }
+
+extension Index {
+    /// A point-in-time snapshot of every entry currently in the index.
+    ///
+    /// Entries are returned in libgit2's internal order (path-sorted with
+    /// stage tiebreaking). Mutating the index through another operation
+    /// invalidates this snapshot — re-read the property to get fresh data.
+    public var entries: [IndexEntry] {
+        repository.lock.withLock {
+            let count = git_index_entrycount(handle)
+            var out: [IndexEntry] = []
+            out.reserveCapacity(count)
+            for i in 0..<count {
+                guard let raw = git_index_get_byindex(handle, i) else { continue }
+                out.append(IndexEntry(raw))
+            }
+            return out
+        }
+    }
+}

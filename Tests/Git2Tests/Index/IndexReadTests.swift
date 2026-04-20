@@ -29,6 +29,18 @@ extension RuntimeSensitiveTests {
                 #expect(index.hasConflicts == false)
             }
         }
+
+        @Test
+        func entries_isEmptyOnFreshRepo() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let repo = try initRepo(at: dir)
+                let index = try repo.index()
+                #expect(index.entries.isEmpty)
+            }
+        }
     }
 }
 
