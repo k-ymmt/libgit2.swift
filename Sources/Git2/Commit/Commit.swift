@@ -105,4 +105,18 @@ public final class Commit: @unchecked Sendable {
             return out
         }
     }
+
+    /// Resolves this commit's root tree from the object database.
+    ///
+    /// Wraps `git_commit_tree`.
+    ///
+    /// - Returns: The ``Tree`` for this commit's snapshot.
+    /// - Throws: ``GitError`` if the tree lookup fails.
+    public func tree() throws(GitError) -> Tree {
+        try repository.lock.withLock { () throws(GitError) -> Tree in
+            var raw: OpaquePointer?
+            try check(git_commit_tree(&raw, handle))
+            return Tree(handle: raw!, repository: repository)
+        }
+    }
 }

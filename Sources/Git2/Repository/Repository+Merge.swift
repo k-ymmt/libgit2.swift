@@ -59,3 +59,29 @@ extension Repository {
         }
     }
 }
+
+extension Repository {
+    /// Wraps `git_merge_trees`. Produces a possibly-conflicting ``Index``
+    /// without touching the working tree.
+    ///
+    /// - Parameter ancestor: Common ancestor tree, or `nil` to run a 2-way
+    ///   merge (libgit2 treats a NULL ancestor as "no common base").
+    public func mergeTrees(
+        ancestor: Tree?,
+        ours: Tree,
+        theirs: Tree,
+        options: MergeOptions = MergeOptions()
+    ) throws(GitError) -> Index {
+        try lock.withLock { () throws(GitError) -> Index in
+            try options.withCOptions { optsPtr throws(GitError) -> Index in
+                var out: OpaquePointer?
+                try check(git_merge_trees(
+                    &out, handle,
+                    ancestor?.handle, ours.handle, theirs.handle,
+                    optsPtr
+                ))
+                return Index(handle: out!, repository: self)
+            }
+        }
+    }
+}
