@@ -35,3 +35,29 @@ extension Repository {
         }
     }
 }
+
+extension Repository {
+    /// Sugar for ``setHead(referenceName:)`` using `reference.name`.
+    ///
+    /// Takes the lock once and calls libgit2 directly — does **not** delegate
+    /// to ``setHead(referenceName:)`` so a reentrant `withLock` cannot occur.
+    public func setHead(to reference: Reference) throws(GitError) {
+        try lock.withLock { () throws(GitError) in
+            // libgit2 contract: git_reference_name is non-NULL for a valid handle.
+            let namePtr = git_reference_name(reference.handle)!
+            try check(git_repository_set_head(handle, namePtr))
+        }
+    }
+
+    /// Sugar for ``setHead(detachedAt:)`` using `commit.oid` (detached).
+    ///
+    /// Takes the lock once and calls libgit2 directly — does **not** delegate
+    /// to ``setHead(detachedAt:)`` so a reentrant `withLock` cannot occur.
+    public func setHead(to commit: Commit) throws(GitError) {
+        try lock.withLock { () throws(GitError) in
+            // libgit2 contract: git_commit_id is non-NULL for a valid handle.
+            var oidCopy = git_commit_id(commit.handle)!.pointee
+            try check(git_repository_set_head_detached(handle, &oidCopy))
+        }
+    }
+}

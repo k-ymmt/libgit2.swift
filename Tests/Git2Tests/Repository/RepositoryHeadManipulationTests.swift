@@ -104,5 +104,49 @@ extension RuntimeSensitiveTests {
                 }
             }
         }
+
+        @Test
+        func setHeadToReference_matchesRefNameOverload() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let fixture = try TestFixture.makeLinearHistory(
+                    commits: [(message: "a\n", author: .test)],
+                    in: dir
+                )
+                let repo = try Repository.open(at: fixture.repositoryURL)
+                let head = try repo.head()
+                let commit = try repo.commit(for: head.target)
+                let featureRef = try repo.createBranch(named: "feature", at: commit, force: false)
+
+                try repo.setHead(to: featureRef)
+
+                #expect(try repo.head().name == "refs/heads/feature")
+            }
+        }
+
+        @Test
+        func setHeadToCommit_matchesDetachedAtOverload() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let fixture = try TestFixture.makeLinearHistory(
+                    commits: [(message: "a\n", author: .test)],
+                    in: dir
+                )
+                let repo = try Repository.open(at: fixture.repositoryURL)
+                let head = try repo.head()
+                let commit = try repo.commit(for: head.target)
+
+                try repo.setHead(to: commit)
+
+                let detached = repo.lock.withLock {
+                    git_repository_head_detached(repo.handle)
+                }
+                #expect(detached == 1)
+            }
+        }
     }
 }
