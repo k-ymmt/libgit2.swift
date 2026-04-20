@@ -37,3 +37,18 @@ extension Repository {
         }
     }
 }
+
+extension Repository {
+    /// Wraps `git_repository_state_cleanup`. Removes state files like
+    /// `MERGE_HEAD`, `MERGE_MSG`, `CHERRY_PICK_HEAD`, `REVERT_HEAD`.
+    ///
+    /// Does **not** touch the working tree. Callers who want a full "abort"
+    /// should follow up with
+    /// ``checkoutHead(options:)`` using
+    /// ``Repository/CheckoutOptions/Strategy/force``.
+    public func cleanupState() throws(GitError) {
+        try lock.withLock { () throws(GitError) in
+            try check(git_repository_state_cleanup(handle))
+        }
+    }
+}

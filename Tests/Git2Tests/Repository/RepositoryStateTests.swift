@@ -107,5 +107,37 @@ extension RuntimeSensitiveTests {
                 }
             }
         }
+
+        @Test
+        func cleanupState_afterMerge_resetsToNone() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let (fx, _, _) = try TestFixture.makeDivergedBranches(in: dir)
+                let repo = try Repository.open(at: fx.repositoryURL)
+                try repo.checkoutHead(options: .init(strategy: [.force]))
+                guard let theirs = try repo.reference(named: "refs/heads/theirs") else {
+                    Issue.record("theirs ref missing"); return
+                }
+                _ = try repo.merge(theirs)
+                #expect(repo.state == .merge)
+
+                try repo.cleanupState()
+                #expect(repo.state == .none)
+            }
+        }
+
+        @Test
+        func cleanupState_onCleanRepo_succeeds() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let repo = try initRepo(at: dir)
+                try repo.cleanupState()
+                #expect(repo.state == .none)
+            }
+        }
     }
 }
