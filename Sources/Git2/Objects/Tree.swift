@@ -127,3 +127,16 @@ extension TreeEntry.FileMode {
         }
     }
 }
+
+extension TreeEntry.FileMode {
+    /// Round-trip the case back into libgit2's `git_filemode_t`.
+    internal var raw: git_filemode_t {
+        switch self {
+        case .tree:            return GIT_FILEMODE_TREE
+        case .blob:            return GIT_FILEMODE_BLOB
+        case .blobExecutable:  return GIT_FILEMODE_BLOB_EXECUTABLE
+        case .link:            return GIT_FILEMODE_LINK
+        case .commit:          return GIT_FILEMODE_COMMIT
+        }
+    }
+}
