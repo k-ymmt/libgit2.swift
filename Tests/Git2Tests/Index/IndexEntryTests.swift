@@ -44,5 +44,33 @@ extension RuntimeSensitiveTests {
             #expect(a == b)
             #expect(a != c)
         }
+
+        @Test
+        func conflict_initIsStoredVerbatim() {
+            let oid = OID(raw: git_oid())
+            let ours = IndexEntry(path: "a", oid: oid, filemode: .blob, stage: .ours)
+            let theirs = IndexEntry(path: "a", oid: oid, filemode: .blob, stage: .theirs)
+            let c = IndexConflict(
+                path: "a",
+                ancestor: nil,
+                ours: ours,
+                theirs: theirs
+            )
+            #expect(c.path == "a")
+            #expect(c.ancestor == nil)
+            #expect(c.ours == ours)
+            #expect(c.theirs == theirs)
+        }
+
+        @Test
+        func conflict_isEquatable() {
+            let oid = OID(raw: git_oid())
+            let ours = IndexEntry(path: "a", oid: oid, filemode: .blob, stage: .ours)
+            let a = IndexConflict(path: "a", ancestor: nil, ours: ours, theirs: nil)
+            let b = IndexConflict(path: "a", ancestor: nil, ours: ours, theirs: nil)
+            let c = IndexConflict(path: "b", ancestor: nil, ours: ours, theirs: nil)
+            #expect(a == b)
+            #expect(a != c)
+        }
     }
 }
