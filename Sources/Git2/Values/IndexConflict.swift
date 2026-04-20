@@ -1,5 +1,3 @@
-import Cgit2
-
 /// The three-way side collection for one conflicted path in the index.
 ///
 /// libgit2 guarantees that at least one of `ancestor` / `ours` / `theirs` is
