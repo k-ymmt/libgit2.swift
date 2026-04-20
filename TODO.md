@@ -83,13 +83,13 @@ Split into two slices. v0.4a covers the ODB-write surface (blob / tree / commit 
 
 #### v0.4a — ODB write foundation
 
-- [ ] **Blob creation** — `Repository.createBlob(data:) -> OID`.
-- [ ] **Tree construction (flat)** — `Repository.tree(entries:) -> Tree` with a `TreeBuilderEntry` snapshot value.
-- [ ] **Commit creation** — `Repository.commit(tree:parents:author:committer:message:updatingRef:)`. Replaces the test-only `TestFixture` builder with a real public API.
-- [ ] **Branch creation / deletion** — `Repository.createBranch(named:at:force:)` / `Repository.deleteBranch(named:)`. Local branches only.
-- [ ] **Tag creation / deletion** — split `createLightweightTag` / `createAnnotatedTag` + `deleteTag(named:)`. `target: Commit` only.
-- [ ] **Generic reference delete** — `Reference.delete()` for non-branch / non-tag refs.
-- [ ] **TestFixture rewrite** — delegate `makeLinearHistory` / `makeMergeHistory` / `makeCommitWithTree` / `makeBranches` / `makeAnnotatedTag` to the new public API; drop the libgit2-direct paths where possible.
+- [x] **Blob creation** — `Repository.createBlob(data:) -> OID`.
+- [x] **Tree construction (flat)** — `Repository.tree(entries:) -> Tree` with a `TreeBuilderEntry` snapshot value.
+- [x] **Commit creation** — `Repository.commit(tree:parents:author:committer:message:updatingRef:)`. Replaces the test-only `TestFixture` builder with a real public API.
+- [x] **Branch creation / deletion** — `Repository.createBranch(named:at:force:)` / `Repository.deleteBranch(named:)`. Local branches only.
+- [x] **Tag creation / deletion** — split `createLightweightTag` / `createAnnotatedTag` + `deleteTag(named:)`. `target: Commit` only.
+- [x] **Generic reference delete** — `Reference.delete()` for non-branch / non-tag refs.
+- [x] **TestFixture rewrite** — delegate `makeLinearHistory` / `makeMergeHistory` / `makeCommitWithTree` / `makeBranches` / `makeAnnotatedTag` to the new public API; drop the libgit2-direct paths where possible.
 
 #### v0.4b — index, checkout, HEAD
 
