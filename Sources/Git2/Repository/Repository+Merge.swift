@@ -34,3 +34,28 @@ extension Repository {
         }
     }
 }
+
+extension Repository {
+    /// Wraps `git_merge_analysis`. Analyzes merging the given heads into HEAD.
+    ///
+    /// Returns the analysis bitfield (possibly combined — e.g.
+    /// `[.fastForward, .normal]`) and the repository's `merge.ff` preference
+    /// (as-configured via `.git/config`; defaults to `.none`).
+    public func mergeAnalysis(
+        against heads: [AnnotatedCommit]
+    ) throws(GitError) -> (analysis: MergeAnalysis, preference: MergePreference) {
+        try lock.withLock { () throws(GitError) -> (MergeAnalysis, MergePreference) in
+            var analysisRaw = git_merge_analysis_t(0)
+            var prefRaw = git_merge_preference_t(0)
+            var headPtrs: [OpaquePointer?] = heads.map { $0.handle }
+            let r: Int32 = headPtrs.withUnsafeMutableBufferPointer { buf in
+                git_merge_analysis(&analysisRaw, &prefRaw, handle, buf.baseAddress, buf.count)
+            }
+            try check(r)
+            return (
+                MergeAnalysis(rawValue: analysisRaw.rawValue),
+                MergePreference(prefRaw)
+            )
+        }
+    }
+}
