@@ -49,3 +49,28 @@ extension Rebase {
     internal var _operationCountStub: Int { 0 }
     public var operationCount: Int { _operationCountStub }
 }
+
+extension Rebase {
+    /// Wraps `git_rebase_next`. Applies the next operation — for any
+    /// non-``RebaseOperation/Kind/exec`` kind the patch is applied to the
+    /// index and (unless ``Repository/RebaseOptions/inMemory`` is `true`)
+    /// to the working tree. Conflicts, if any, land in the index; callers
+    /// inspect ``Index/hasConflicts`` + ``Index/conflicts()`` before
+    /// calling ``commit(author:committer:message:encoding:)``.
+    ///
+    /// - Returns: the next ``RebaseOperation``, or `nil` when all
+    ///   operations have been applied (libgit2 `GIT_ITEROVER` translated to
+    ///   `Optional.none`).
+    public func next() throws(GitError) -> RebaseOperation? {
+        try repository.lock.withLock { () throws(GitError) -> RebaseOperation? in
+            var opPtr: UnsafeMutablePointer<git_rebase_operation>?
+            let r = git_rebase_next(&opPtr, handle)
+            if r == GIT_ITEROVER.rawValue {
+                return nil
+            }
+            try check(r)
+            guard let op = opPtr else { return nil }
+            return RebaseOperation(copyingFrom: op)
+        }
+    }
+}
