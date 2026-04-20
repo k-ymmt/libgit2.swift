@@ -104,6 +104,25 @@ extension RuntimeSensitiveTests {
                 #expect(index2.entries[0].path == "persist.txt")
             }
         }
+        @Test
+        func reload_discardsUnsavedInMemoryChanges() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let repo = try initRepo(at: dir)
+                let fileURL = dir.appendingPathComponent("later.txt")
+                try "later\n".data(using: .utf8)!.write(to: fileURL)
+
+                let index = try repo.index()
+                try index.addPath("later.txt")
+                #expect(index.entries.count == 1)
+
+                // Don't save — just reload. In-memory stage is discarded.
+                try index.reload()
+                #expect(index.entries.isEmpty)
+            }
+        }
     }
 }
 

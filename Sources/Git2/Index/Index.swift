@@ -122,3 +122,18 @@ extension Index {
         }
     }
 }
+
+extension Index {
+    /// Reloads the index from the on-disk `.git/index` file, discarding any
+    /// unsaved in-memory changes.
+    ///
+    /// - Parameter force: If `true` (default), reload unconditionally,
+    ///   discarding all unsaved in-memory changes. If `false`, libgit2 may
+    ///   short-circuit when the on-disk file's modification-time stamp matches
+    ///   the cached one; purely in-memory changes are then left untouched.
+    public func reload(force: Bool = true) throws(GitError) {
+        try repository.lock.withLock { () throws(GitError) in
+            try check(git_index_read(handle, force ? 1 : 0))
+        }
+    }
+}
