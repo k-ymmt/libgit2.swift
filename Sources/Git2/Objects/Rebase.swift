@@ -43,11 +43,72 @@ public final class Rebase: @unchecked Sendable {
 }
 
 extension Rebase {
-    // Stub added in Task 4; real implementation lands in Task 9.
-    // Kept here so the disabled openRebase_afterStart_resumes test
-    // type-checks once its body is re-enabled. Returns 0 until Task 9.
-    internal var _operationCountStub: Int { 0 }
-    public var operationCount: Int { _operationCountStub }
+    /// Wraps `git_rebase_operation_entrycount`. Total operation count.
+    public var operationCount: Int {
+        repository.lock.withLock { git_rebase_operation_entrycount(handle) }
+    }
+
+    /// Wraps `git_rebase_operation_current`. The index of the currently
+    /// applying operation, or `nil` before the first ``next()`` call
+    /// (libgit2's `GIT_REBASE_NO_OPERATION` sentinel = `SIZE_MAX`, which
+    /// bridges to `-1` when the `size_t` return value is imported as `Int`).
+    public var currentOperationIndex: Int? {
+        repository.lock.withLock {
+            let raw = git_rebase_operation_current(handle)
+            // `size_t` bridges to `Int` here, and `GIT_REBASE_NO_OPERATION`
+            // (`SIZE_MAX`) imports as `UInt`. Compare via the signed bit
+            // pattern so the sentinel matches regardless of Clang's import
+            // choice for the macro type.
+            return raw == Int(bitPattern: GIT_REBASE_NO_OPERATION) ? nil : raw
+        }
+    }
+
+    /// Wraps `git_rebase_operation_byindex`. Returns `nil` when `index` is
+    /// out of bounds.
+    public func operation(at index: Int) -> RebaseOperation? {
+        repository.lock.withLock {
+            guard let opPtr = git_rebase_operation_byindex(handle, index) else {
+                return nil
+            }
+            return RebaseOperation(copyingFrom: opPtr)
+        }
+    }
+
+    /// Wraps `git_rebase_orig_head_name`. `nil` when HEAD was detached at
+    /// rebase start (no ref name to record).
+    public var origHeadName: String? {
+        repository.lock.withLock {
+            guard let c = git_rebase_orig_head_name(handle) else { return nil }
+            let s = String(cString: c)
+            return s.isEmpty ? nil : s
+        }
+    }
+
+    /// Wraps `git_rebase_orig_head_id`. `nil` when the rebase has no
+    /// recorded original HEAD id.
+    public var origHeadOid: OID? {
+        repository.lock.withLock {
+            guard let p = git_rebase_orig_head_id(handle) else { return nil }
+            return OID(raw: p.pointee)
+        }
+    }
+
+    /// Wraps `git_rebase_onto_name`.
+    public var ontoName: String? {
+        repository.lock.withLock {
+            guard let c = git_rebase_onto_name(handle) else { return nil }
+            let s = String(cString: c)
+            return s.isEmpty ? nil : s
+        }
+    }
+
+    /// Wraps `git_rebase_onto_id`.
+    public var ontoOid: OID? {
+        repository.lock.withLock {
+            guard let p = git_rebase_onto_id(handle) else { return nil }
+            return OID(raw: p.pointee)
+        }
+    }
 }
 
 extension Rebase {
