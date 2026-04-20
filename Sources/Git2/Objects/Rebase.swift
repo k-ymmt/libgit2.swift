@@ -127,3 +127,31 @@ extension Rebase {
         }
     }
 }
+
+extension Rebase {
+    /// Wraps `git_rebase_finish`. Finalizes a rebase after every operation
+    /// has been applied. Removes `.git/rebase-merge/`. Optionally writes a
+    /// reflog signature line.
+    public func finish(signature: Signature? = nil) throws(GitError) {
+        try repository.lock.withLock { () throws(GitError) in
+            let sigHandle: UnsafeMutablePointer<git_signature>?
+            if let signature {
+                sigHandle = try repository.signatureHandle(for: signature)
+            } else {
+                sigHandle = nil
+            }
+            defer { if let h = sigHandle { git_signature_free(h) } }
+
+            try check(git_rebase_finish(handle, sigHandle))
+        }
+    }
+
+    /// Wraps `git_rebase_abort`. Aborts the rebase and restores the
+    /// repository + working tree to their state before rebase began.
+    /// libgit2 implicitly applies `GIT_CHECKOUT_FORCE` during this restore.
+    public func abort() throws(GitError) {
+        try repository.lock.withLock { () throws(GitError) in
+            try check(git_rebase_abort(handle))
+        }
+    }
+}
