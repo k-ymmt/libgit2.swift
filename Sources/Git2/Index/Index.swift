@@ -101,3 +101,15 @@ extension Index {
         }
     }
 }
+
+extension Index {
+    /// Removes the entry at `path` from the index.
+    ///
+    /// Does not touch the working directory. For conflicted paths, removes
+    /// every stage (ancestor / ours / theirs) in one call.
+    public func removePath(_ path: String) throws(GitError) {
+        try repository.lock.withLock { () throws(GitError) in
+            try check(path.withCString { git_index_remove_bypath(handle, $0) })
+        }
+    }
+}

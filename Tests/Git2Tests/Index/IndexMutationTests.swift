@@ -64,6 +64,24 @@ extension RuntimeSensitiveTests {
                 }
             }
         }
+        @Test
+        func removePath_undoesAddPath() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let repo = try initRepo(at: dir)
+                let fileURL = dir.appendingPathComponent("x.txt")
+                try "x\n".data(using: .utf8)!.write(to: fileURL)
+
+                let index = try repo.index()
+                try index.addPath("x.txt")
+                #expect(index.entries.count == 1)
+
+                try index.removePath("x.txt")
+                #expect(index.entries.isEmpty)
+            }
+        }
     }
 }
 
