@@ -49,6 +49,14 @@ extension RuntimeSensitiveTests {
                 #expect(conflicts[0].ancestor?.stage == .ancestor)
                 #expect(conflicts[0].ours?.stage == .ours)
                 #expect(conflicts[0].theirs?.stage == .theirs)
+
+                // Verify the injected OIDs match the content-addressed blobs.
+                let expectedAncestor = try repo.createBlob(data: Data("A".utf8))
+                let expectedOurs     = try repo.createBlob(data: Data("O".utf8))
+                let expectedTheirs   = try repo.createBlob(data: Data("T".utf8))
+                #expect(conflicts[0].ancestor?.oid == expectedAncestor)
+                #expect(conflicts[0].ours?.oid == expectedOurs)
+                #expect(conflicts[0].theirs?.oid == expectedTheirs)
             }
         }
 

@@ -160,6 +160,11 @@ extension Index {
 
 extension Index {
     /// A point-in-time snapshot of every conflicting path in the index.
+    ///
+    /// Returns `[]` when the index has no conflicts, or in the rare case where
+    /// libgit2's conflict iterator cannot be initialized (typically a memory
+    /// allocation failure). Use ``hasConflicts`` to distinguish "no conflicts"
+    /// from the iterator-init failure case.
     public var conflicts: [IndexConflict] {
         repository.lock.withLock {
             var iter: OpaquePointer?
@@ -176,7 +181,7 @@ extension Index {
                 var t: UnsafePointer<git_index_entry>?
                 let rc = git_index_conflict_next(&a, &o, &t, iter)
                 if rc == GIT_ITEROVER.rawValue { break }
-                if rc < 0 { break }   // unexpected; surface as empty end-of-iteration
+                if rc < 0 { break }   // unexpected error mid-iteration — returns whatever was collected so far
                 let path = [a, o, t].compactMap { $0 }
                     .map { String(cString: $0.pointee.path) }
                     .first ?? ""
