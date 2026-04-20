@@ -74,4 +74,18 @@ public final class Reference: @unchecked Sendable {
             return Commit(handle: raw!, repository: repository)
         }
     }
+
+    /// Deletes this reference from the repository.
+    ///
+    /// Uses `git_reference_delete`, which does not touch reflog or config.
+    /// For branches, prefer ``Repository/deleteBranch(named:)`` so reflog and
+    /// tracking config are cleaned up too.
+    ///
+    /// After deletion, this ``Reference`` handle still exists in memory but
+    /// further operations on it will throw or return stale data.
+    public func delete() throws(GitError) {
+        try repository.lock.withLock { () throws(GitError) in
+            try check(git_reference_delete(handle))
+        }
+    }
 }
