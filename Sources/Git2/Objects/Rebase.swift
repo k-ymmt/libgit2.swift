@@ -216,3 +216,19 @@ extension Rebase {
         }
     }
 }
+
+extension Rebase {
+    /// Wraps `git_rebase_inmemory_index`. Returns the index produced by the
+    /// last ``next()``.
+    ///
+    /// Only valid when the rebase was initialized with
+    /// ``Repository/RebaseOptions/inMemory`` set to `true`. Calling this on
+    /// an on-disk rebase surfaces libgit2's error unchanged.
+    public func inMemoryIndex() throws(GitError) -> Index {
+        try repository.lock.withLock { () throws(GitError) -> Index in
+            var out: OpaquePointer?
+            try check(git_rebase_inmemory_index(&out, handle))
+            return Index(handle: out!, repository: repository)
+        }
+    }
+}
