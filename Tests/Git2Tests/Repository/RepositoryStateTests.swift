@@ -48,5 +48,64 @@ extension RuntimeSensitiveTests {
                 #expect(repo.state == .cherrypick)
             }
         }
+
+        @Test
+        func message_afterMerge_returnsMergeMsg() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let (fx, _, _) = try TestFixture.makeDivergedBranches(in: dir)
+                let repo = try Repository.open(at: fx.repositoryURL)
+                try repo.checkoutHead(options: .init(strategy: [.force]))
+                guard let theirs = try repo.reference(named: "refs/heads/theirs") else {
+                    Issue.record("theirs ref missing"); return
+                }
+                _ = try repo.merge(theirs)
+
+                let msg = try repo.message()
+                #expect(msg.isEmpty == false)
+            }
+        }
+
+        @Test
+        func message_onCleanRepo_throwsNotFound() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let repo = try initRepo(at: dir)
+                do {
+                    _ = try repo.message()
+                    Issue.record("expected throw")
+                } catch let e as GitError {
+                    #expect(e.code == .notFound)
+                }
+            }
+        }
+
+        @Test
+        func removeMessage_clearsMergeMsg() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let (fx, _, _) = try TestFixture.makeDivergedBranches(in: dir)
+                let repo = try Repository.open(at: fx.repositoryURL)
+                try repo.checkoutHead(options: .init(strategy: [.force]))
+                guard let theirs = try repo.reference(named: "refs/heads/theirs") else {
+                    Issue.record("theirs ref missing"); return
+                }
+                _ = try repo.merge(theirs)
+
+                try repo.removeMessage()
+                do {
+                    _ = try repo.message()
+                    Issue.record("expected throw after removeMessage")
+                } catch let e as GitError {
+                    #expect(e.code == .notFound)
+                }
+            }
+        }
     }
 }
