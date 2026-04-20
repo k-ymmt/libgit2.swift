@@ -26,3 +26,13 @@ public final class Index: @unchecked Sendable {
         git_index_free(handle)
     }
 }
+
+extension Index {
+    /// Whether the index currently records any merge conflicts
+    /// (i.e. entries with stage other than `.normal`).
+    public var hasConflicts: Bool {
+        repository.lock.withLock {
+            git_index_has_conflicts(handle) != 0
+        }
+    }
+}
