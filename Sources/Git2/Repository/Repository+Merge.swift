@@ -110,6 +110,132 @@ extension Repository {
 }
 
 extension Repository {
+    /// Shared body for ``merge(_:mergeOptions:checkoutOptions:)`` and
+    /// ``merge(branchNamed:mergeOptions:checkoutOptions:)``. Assumes the
+    /// caller already holds the lock.
+    ///
+    /// - Parameters:
+    ///   - branchHandle: a `git_reference *` to the ref being merged. Caller
+    ///     retains ownership.
+    ///   - mergeOptions / checkoutOptions: forwarded unchanged.
+    /// - Returns: the analysis bits describing which dispatch path ran.
+    private func performMerge(
+        branchHandle: OpaquePointer,
+        mergeOptions: MergeOptions,
+        checkoutOptions: CheckoutOptions
+    ) throws(GitError) -> MergeAnalysis {
+        // 1. Build an annotated commit (ref-provenance).
+        var acPtr: OpaquePointer?
+        try check(git_annotated_commit_from_ref(&acPtr, handle, branchHandle))
+        defer { git_annotated_commit_free(acPtr) }
+
+        // 2. Analyze.
+        var analysisRaw = git_merge_analysis_t(0)
+        var prefRaw = git_merge_preference_t(0)
+        var heads: [OpaquePointer?] = [acPtr]
+        let analysisResult: Int32 = heads.withUnsafeMutableBufferPointer { buf in
+            git_merge_analysis(&analysisRaw, &prefRaw, handle, buf.baseAddress, buf.count)
+        }
+        try check(analysisResult)
+        let analysis = MergeAnalysis(rawValue: analysisRaw.rawValue)
+
+        // 3. Dispatch.
+        if analysis.contains(.upToDate) {
+            return analysis
+        }
+
+        if analysis.contains(.unborn) {
+            // Attach HEAD to the branch, then checkoutHead against the tree
+            // that now lives there.
+            let namePtr = git_reference_name(branchHandle)!
+            try check(git_repository_set_head(handle, namePtr))
+            try checkoutOptions.withCOptions { optsPtr throws(GitError) in
+                try check(git_checkout_head(handle, optsPtr))
+            }
+            return analysis
+        }
+
+        if analysis.contains(.fastForward) {
+            // Peel the branch, checkout its tree, then point HEAD at the
+            // branch ref.
+            var commitPtr: OpaquePointer?
+            try check(git_reference_peel(&commitPtr, branchHandle, GIT_OBJECT_COMMIT))
+            defer { git_object_free(commitPtr) }
+
+            try checkoutOptions.withCOptions { optsPtr throws(GitError) in
+                try check(git_checkout_tree(handle, commitPtr, optsPtr))
+            }
+            let namePtr = git_reference_name(branchHandle)!
+            try check(git_repository_set_head(handle, namePtr))
+            return analysis
+        }
+
+        // Normal: git_merge updates working tree + index + writes MERGE_HEAD/MSG.
+        try mergeOptions.withCOptions { mPtr throws(GitError) in
+            try checkoutOptions.withCOptions { cPtr throws(GitError) in
+                var headPtrs: [OpaquePointer?] = [acPtr]
+                let r: Int32 = headPtrs.withUnsafeMutableBufferPointer { buf in
+                    git_merge(handle, buf.baseAddress, buf.count, mPtr, cPtr)
+                }
+                try check(r)
+            }
+        }
+        return analysis
+    }
+
+    /// Porcelain merge. Analyzes the requested merge, then dispatches:
+    /// - ``MergeAnalysis/upToDate`` — no-op
+    /// - ``MergeAnalysis/unborn`` — attach HEAD + checkout
+    /// - ``MergeAnalysis/fastForward`` — checkout + move HEAD
+    /// - ``MergeAnalysis/normal`` — call `git_merge` (conflicts land in the
+    ///   index; state becomes ``State/merge``)
+    ///
+    /// The entire analysis → dispatch sequence runs inside a single lock
+    /// section — no other task observes a mid-merge state.
+    ///
+    /// - Returns: the analysis bits describing which path ran.
+    @discardableResult
+    public func merge(
+        _ branch: Reference,
+        mergeOptions: MergeOptions = MergeOptions(),
+        checkoutOptions: CheckoutOptions = CheckoutOptions()
+    ) throws(GitError) -> MergeAnalysis {
+        try lock.withLock { () throws(GitError) -> MergeAnalysis in
+            try performMerge(
+                branchHandle: branch.handle,
+                mergeOptions: mergeOptions,
+                checkoutOptions: checkoutOptions
+            )
+        }
+    }
+
+    /// Porcelain convenience: resolve `refs/heads/<name>` and forward to
+    /// ``merge(_:mergeOptions:checkoutOptions:)``.
+    /// Local branches only (`GIT_BRANCH_LOCAL`).
+    @discardableResult
+    public func merge(
+        branchNamed name: String,
+        mergeOptions: MergeOptions = MergeOptions(),
+        checkoutOptions: CheckoutOptions = CheckoutOptions()
+    ) throws(GitError) -> MergeAnalysis {
+        try lock.withLock { () throws(GitError) -> MergeAnalysis in
+            var refHandle: OpaquePointer?
+            let lookup: Int32 = name.withCString { namePtr in
+                git_branch_lookup(&refHandle, handle, namePtr, GIT_BRANCH_LOCAL)
+            }
+            try check(lookup)
+            defer { git_reference_free(refHandle) }
+
+            return try performMerge(
+                branchHandle: refHandle!,
+                mergeOptions: mergeOptions,
+                checkoutOptions: checkoutOptions
+            )
+        }
+    }
+}
+
+extension Repository {
     /// Low-level merge. Writes MERGE_HEAD / MERGE_MSG, updates the index,
     /// updates the working tree. Does **not** fast-forward — callers who
     /// want fast-forward on applicable histories should use
