@@ -80,7 +80,7 @@ Split into two slices. v0.4a covers the ODB-write surface (blob / tree / commit 
 
 #### v0.4b — index, checkout, HEAD
 
-Split into two slices. v0.4b-i covers the index surface (read, stage from working dir, conflict enumeration, write-tree). v0.4b-ii covers the filesystem-touching surface (checkout, HEAD manipulation). See the v0.4b-i spec under `docs/superpowers/specs/2026-04-20-git2-v0.4b-i-index-design.md`.
+Split into two slices. **v0.4b-i (index surface) is shipped** — see the spec under `docs/superpowers/specs/2026-04-20-git2-v0.4b-i-index-design.md`. v0.4b-ii covers the filesystem-touching surface (checkout, HEAD manipulation).
 
 ##### v0.4b-ii — checkout, HEAD
 
