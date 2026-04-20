@@ -108,3 +108,45 @@ extension Repository {
         }
     }
 }
+
+extension Repository {
+    /// Low-level merge. Writes MERGE_HEAD / MERGE_MSG, updates the index,
+    /// updates the working tree. Does **not** fast-forward — callers who
+    /// want fast-forward on applicable histories should use
+    /// ``merge(_:mergeOptions:checkoutOptions:)-<Reference-overload>`` or
+    /// analyze first with ``mergeAnalysis(against:)``.
+    ///
+    /// `heads.count` must equal 1 in v0.5a-i; octopus merge is deferred.
+    /// Passing 0 or >1 heads throws ``GitError/Code/invalid`` /
+    /// ``GitError/Class/invalid``.
+    ///
+    /// Conflicts are surfaced through the index (inspect
+    /// ``Index/hasConflicts`` / ``Index/conflicts``) and
+    /// ``Repository/state``, not as Swift errors. Set
+    /// ``MergeOptions/Flags/failOnConflict`` to opt into throwing on
+    /// conflicts.
+    public func merge(
+        _ heads: [AnnotatedCommit],
+        mergeOptions: MergeOptions = MergeOptions(),
+        checkoutOptions: CheckoutOptions = CheckoutOptions()
+    ) throws(GitError) {
+        guard heads.count == 1 else {
+            throw GitError(
+                code: .invalid, class: .invalid,
+                message: "v0.5a-i merge() requires exactly one head; octopus merge is deferred"
+            )
+        }
+
+        try lock.withLock { () throws(GitError) in
+            try mergeOptions.withCOptions { mPtr throws(GitError) in
+                try checkoutOptions.withCOptions { cPtr throws(GitError) in
+                    var headPtrs: [OpaquePointer?] = heads.map { $0.handle }
+                    let r: Int32 = headPtrs.withUnsafeMutableBufferPointer { buf in
+                        git_merge(handle, buf.baseAddress, buf.count, mPtr, cPtr)
+                    }
+                    try check(r)
+                }
+            }
+        }
+    }
+}
