@@ -56,3 +56,32 @@ extension Index {
         }
     }
 }
+
+extension Index {
+    /// Looks up a single entry by path and stage.
+    ///
+    /// - Parameter stage: Defaults to `.normal`. For conflicted paths, pass
+    ///   `.ancestor` / `.ours` / `.theirs` to reach the specific side — or
+    ///   use ``conflict(for:)`` / ``conflicts`` to retrieve all three at once.
+    /// - Returns: The matching entry, or `nil` if no entry exists at that
+    ///   path and stage.
+    public func entry(
+        at path: String,
+        stage: IndexEntry.Stage = .normal
+    ) -> IndexEntry? {
+        let stageValue: Int32 = switch stage {
+        case .normal:   0
+        case .ancestor: 1
+        case .ours:     2
+        case .theirs:   3
+        }
+        return repository.lock.withLock {
+            path.withCString { p in
+                guard let raw = git_index_get_bypath(handle, p, stageValue) else {
+                    return nil as IndexEntry?
+                }
+                return IndexEntry(raw)
+            }
+        }
+    }
+}
