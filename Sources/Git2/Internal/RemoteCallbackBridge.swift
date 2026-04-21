@@ -29,8 +29,8 @@ internal final class RemoteCallbackContext {
 /// inspect `capturedError` after libgit2 returns.
 internal func withRemoteCallbacks<R>(
     _ options: Repository.FetchOptions,
-    _ body: (UnsafeMutablePointer<git_remote_callbacks>, RemoteCallbackContext) -> R
-) -> R {
+    _ body: (UnsafeMutablePointer<git_remote_callbacks>, RemoteCallbackContext) throws(GitError) -> R
+) throws(GitError) -> R {
     var cbs = git_remote_callbacks()
     let rc = git_remote_init_callbacks(&cbs, UInt32(GIT_REMOTE_CALLBACKS_VERSION))
     precondition(rc == 0, "git_remote_init_callbacks should never fail at version \(GIT_REMOTE_CALLBACKS_VERSION)")
@@ -42,11 +42,18 @@ internal func withRemoteCallbacks<R>(
     if options.certificateCheck != nil { cbs.certificate_check = remoteBridge_certCheck }
     if options.transferProgress != nil { cbs.transfer_progress = remoteBridge_transfer }
 
-    return withExtendedLifetime(ctx) {
+    // `withExtendedLifetime` / `withUnsafeMutablePointer` use `rethrows`, which
+    // cannot forward typed throws. Bridge through Result<R, GitError>.
+    let result: Result<R, GitError> = withExtendedLifetime(ctx) {
         withUnsafeMutablePointer(to: &cbs) { cbsPtr in
-            body(cbsPtr, ctx)
+            do throws(GitError) {
+                return .success(try body(cbsPtr, ctx))
+            } catch {
+                return .failure(error)
+            }
         }
     }
+    return try result.get()
 }
 
 // MARK: - @convention(c) Trampolines
