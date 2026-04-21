@@ -95,5 +95,46 @@ extension RuntimeSensitiveTests {
                 #expect(fm.fileExists(atPath: deep.path))
             }
         }
+
+        @Test
+        func create_onExistingRepo_isIdempotentReinit() throws {
+            try Git.bootstrap(); defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let target = dir.appendingPathComponent("repo")
+                let headURL = target.appendingPathComponent(".git/HEAD")
+
+                // First create: fresh repo.
+                _ = try Repository.create(at: target)
+                let firstHEAD = try String(contentsOf: headURL, encoding: .utf8)
+
+                // Second create on the same path: must succeed, HEAD unchanged.
+                _ = try Repository.create(at: target)
+                let secondHEAD = try String(contentsOf: headURL, encoding: .utf8)
+
+                #expect(firstHEAD == secondHEAD)
+            }
+        }
+
+        @Test
+        func create_onExistingRepo_newInitialBranch_retargetsHead() throws {
+            try Git.bootstrap(); defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let target = dir.appendingPathComponent("repo")
+                let headURL = target.appendingPathComponent(".git/HEAD")
+
+                _ = try Repository.create(at: target, initialBranch: "main")
+                let beforeHEAD = try String(contentsOf: headURL, encoding: .utf8)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                #expect(beforeHEAD == "ref: refs/heads/main")
+
+                // Reinit with a new initial branch — libgit2 retargets HEAD.
+                _ = try Repository.create(at: target, initialBranch: "trunk")
+                let afterHEAD = try String(contentsOf: headURL, encoding: .utf8)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                #expect(afterHEAD == "ref: refs/heads/trunk")
+            }
+        }
     }
 }
