@@ -183,3 +183,23 @@ extension Remote {
         }
     }
 }
+
+extension Remote {
+    /// Wraps `git_remote_default_branch`. Returns the fully qualified
+    /// ref name (e.g. `"refs/heads/main"`) that the remote advertised
+    /// as its default on the last connection.
+    ///
+    /// Requires a prior successful ``fetch(refspecs:options:reflogMessage:)``
+    /// on this ``Remote`` instance — libgit2 caches the advertisement
+    /// from the fetch session. Throws ``GitError/Code/unbornBranch`` or
+    /// ``GitError/Code/notFound`` when the remote has not advertised a
+    /// default or the session has not run yet.
+    public func defaultBranch() throws(GitError) -> String {
+        try repository.lock.withLock { () throws(GitError) -> String in
+            var buf = git_buf()
+            try check(git_remote_default_branch(&buf, handle))
+            defer { git_buf_dispose(&buf) }
+            return String(cString: buf.ptr)
+        }
+    }
+}

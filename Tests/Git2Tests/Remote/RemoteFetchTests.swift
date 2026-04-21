@@ -135,4 +135,20 @@ struct RemoteFetchTests {
             #expect(data.isEmpty)
         }
     }
+
+    @Test func defaultBranch_afterFetch_returnsMain() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let fx = try LocalRemoteFixture.make(in: dir)
+            let repo = try Repository.open(at: fx.downstreamURL)
+            let remote = try repo.createRemote(named: "origin", url: fx.upstreamURLString)
+            try remote.fetch()
+            let branch = try remote.defaultBranch()
+            // Git's default branch name depends on init.defaultBranch;
+            // libgit2 defaults to "master" when unconfigured. Accept
+            // either, since the upstream fixture writes HEAD via the
+            // first commit's `updatingRef: "HEAD"` path.
+            #expect(["refs/heads/main", "refs/heads/master"].contains(branch))
+        }
+    }
 }
