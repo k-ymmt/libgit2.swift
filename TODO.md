@@ -115,6 +115,19 @@ Non-blocking follow-ups identified while implementing v0.5a-ii. Each is additive
 - [ ] **`withTemporaryDirectoryAsync` hoist.** `CheckoutConcurrencyTests.swift`, `MergeConcurrencyTests.swift`, and `RebaseConcurrencyTests.swift` each define their own private copy. Hoist trigger (three duplicates) is already met; pull into `Tests/Git2Tests/Support/` on the next sweep.
 - [ ] **`RebaseConcurrencyTests` sanity assertion.** The parallel test currently only asserts "doesn't crash"; adding `#expect(rebase.operationCount == 3)` after the task group would tighten the guarantee that metadata reads still return correct values under contention.
 
+## Deferred from v0.5b-ii (network — push)
+
+Non-blocking follow-ups identified while implementing v0.5b-ii. Each is additive and non-breaking, and can be revisited when a concrete use case appears.
+
+- [ ] **`push_negotiation` callback.** Wrapping `git_push_update *updates` (array of `(src_refname, dst_refname, src_oid, dst_oid)`) as a Swift value type. Used for "veto the whole push before transfer" hooks (e.g. pre-flight force-push confirmation UI). v0.5b-ii surfaces `push_transfer_progress` and `push_update_reference` only.
+- [ ] **`git_push_options.pb_parallelism`.** Pack-builder thread count. Default 0 lets libgit2 pick; tuning needs have not appeared yet.
+- [ ] **`git_push_options.remote_push_options`.** Protocol-v2 `-o key=value` server-side options (GitLab `ci.skip`, etc.). GitHub does not honor server-side push options today.
+- [ ] **`git_remote_upload` / `_connect` / primitives.** v0.5b-ii ships only the `push` porcelain. Decomposed primitives land if a caller demonstrates a concrete need.
+- [ ] **Push-path `credentials_throwingNonGitError_wrapsAsUserCallback` tightening.** The v0.5b-ii test currently accepts any `GitError.code != .ok` because reaching the credentials callback deterministically requires a live HTTP server; see the v0.5b-i sibling deferred item.
+- [ ] **`RemotePushConcurrencyTests` under TSan.** Same macOS 25.3 / Xcode 26.3 `libclang_rt.tsan_osx_dynamic.dylib` code-signature rejection tracked for `RemoteConcurrencyTests` in v0.5b-i. Smoke-test only until the toolchain accepts the sanitizer runtime.
+- [ ] **Rejection-message machine-readability.** `GitError.message` for the synthesized rejection is explicitly documented as not a machine-readable contract. If a consumer needs structured per-ref results without a `pushUpdateReference` closure, expose a `PushResult` return type variant — this requires breaking the current `throws(GitError)` signature, so additive only through a sibling method.
+- [ ] **`pushUpdateReference` rejection-path coverage over `file://`.** Empirically, libgit2's local transport short-circuits non-fast-forward to `GIT_ENONFASTFORWARD` directly from `git_remote_push` without invoking `push_update_reference`. The HTTP transport behaves differently (callback receives `status != nil`, rejection synthesis fires). v0.5b-ii covers the HTTP path via the env-gated GitHub integration; the local-transport rejection-callback coverage is deferred until a server-side hook fixture is worth the CI complexity (e.g. installing a `pre-receive` hook shell script in the fixture's bare upstream that rejects with a controlled status — would expose whether libgit2's local transport runs hooks at all, which it currently does not in 1.9.x).
+
 ## Deferred from v0.5b-i (network — fetch)
 
 Non-blocking follow-ups identified while implementing v0.5b-i. Each is additive and non-breaking, and can be revisited when a concrete use case appears.
