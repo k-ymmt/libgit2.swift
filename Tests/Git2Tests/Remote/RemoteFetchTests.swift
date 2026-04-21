@@ -151,4 +151,30 @@ struct RemoteFetchTests {
             #expect(["refs/heads/main", "refs/heads/master"].contains(branch))
         }
     }
+
+    @Test func repositoryFetch_remoteNamed_sugar() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let fx = try LocalRemoteFixture.make(in: dir)
+            let repo = try Repository.open(at: fx.downstreamURL)
+            _ = try repo.createRemote(named: "origin", url: fx.upstreamURLString)
+            try repo.fetch(remoteNamed: "origin")
+            let ref = try #require(try repo.reference(named: "refs/remotes/origin/main"))
+            #expect(try ref.target == fx.seedOIDs.last!)
+        }
+    }
+
+    @Test func repositoryFetch_unknownRemoteThrowsNotFound() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let fx = try LocalRemoteFixture.make(in: dir)
+            let repo = try Repository.open(at: fx.downstreamURL)
+            do {
+                try repo.fetch(remoteNamed: "nope")
+                Issue.record("expected throw")
+            } catch let error as GitError {
+                #expect(error.code == .notFound)
+            }
+        }
+    }
 }
