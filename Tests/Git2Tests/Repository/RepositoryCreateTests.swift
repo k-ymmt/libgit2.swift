@@ -136,5 +136,30 @@ extension RuntimeSensitiveTests {
                 #expect(afterHEAD == "ref: refs/heads/trunk")
             }
         }
+
+        @Test
+        func create_unusualInitialBranch_isAcceptedVerbatim() throws {
+            try Git.bootstrap(); defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let target = dir.appendingPathComponent("repo")
+                // libgit2 1.9.x performs NO validation on `initial_head`
+                // in git_repository_init_ext — it writes any supplied
+                // string directly to HEAD. This test locks in that
+                // thin-wrapper behavior: if a future libgit2 version
+                // adds validation, this test fails visibly and we
+                // decide whether to surface the new error or update
+                // the test.
+                let repo = try Repository.create(
+                    at: target,
+                    initialBranch: "foo bar"
+                )
+
+                let headURL = repo.gitDirectory.appendingPathComponent("HEAD")
+                let head = try String(contentsOf: headURL, encoding: .utf8)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                #expect(head == "ref: refs/heads/foo bar")
+            }
+        }
     }
 }
