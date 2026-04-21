@@ -112,7 +112,6 @@ Non-blocking follow-ups identified while implementing v0.5a-ii. Each is additive
 - [ ] **FileMode integration coverage for `.link` / `.commit` through rebase.** Same shape as the v0.4a / v0.4b-ii / v0.5a-i deferred items — surfaces once the fixture layer supports those filemodes more conveniently.
 - [ ] **`Rebase` handle-consumed guard.** `finish()` / `abort()` tear down the repository-side state but the Swift handle stays live until deinit; subsequent calls pass through libgit2's (actually idempotent in 1.9.x — not erroring) behavior. A `consuming func` or state-machine guard could reject the second call at the Swift layer — deferred because it diverges from every other handle class's "thin wrapper" convention.
 - [ ] **`ontoName` / `origHeadName` asymmetry.** libgit2 strips `refs/heads/` from `git_rebase_onto_name` but keeps the full canonical path in `git_rebase_orig_head_name`. v0.5a-ii surfaces libgit2's behavior unchanged. Normalizing this at the Swift layer (e.g. always returning the canonical form) would diverge from the spec's "thin wrapper" policy; revisit if the asymmetry becomes a UX issue.
-- [ ] **`withTemporaryDirectoryAsync` hoist.** `CheckoutConcurrencyTests.swift`, `MergeConcurrencyTests.swift`, and `RebaseConcurrencyTests.swift` each define their own private copy. Hoist trigger (three duplicates) is already met; pull into `Tests/Git2Tests/Support/` on the next sweep.
 - [ ] **`RebaseConcurrencyTests` sanity assertion.** The parallel test currently only asserts "doesn't crash"; adding `#expect(rebase.operationCount == 3)` after the task group would tighten the guarantee that metadata reads still return correct values under contention.
 
 ## Deferred from v0.5b-ii (network — push)
@@ -136,7 +135,6 @@ Non-blocking follow-ups identified while implementing v0.5b-ii. Each is additive
 
 Non-blocking follow-ups identified while implementing v0.5b-i. Each is additive and non-breaking, and can be revisited when a concrete use case appears.
 
-- [ ] **Push surface (v0.5b-ii).** `git_remote_push`, `Repository.PushOptions` (parallel to `FetchOptions`), `push_transfer_progress` / `push_negotiation` / `push_update_reference` callbacks. Deliberate split so the callback-bridge mechanism landed on fetch first.
 - [ ] **Remote primitive APIs.** `git_remote_connect` / `_connect_ext` / `_download` / `_update_tips` / `_upload` / `_disconnect` / `_stop` / `_ls` / `_connected` / `_prune`. v0.5b-i ships only the `fetch` porcelain.
 - [ ] **Proxy options.** `ProxyOptions` value type wrapping `git_proxy_options` (type + url + credentials + certificate_check) with `FetchOptions.proxy` / `PushOptions.proxy` fields. v0.5b-i is "no proxy".
 - [ ] **SSH credentials.** `Credential.sshKey` / `.sshCustom` / `.sshInteractive` / `.sshMemory` cases, landing with the SSH slice once libssh2 is bundled into the XCFramework (currently `USE_SSH=OFF`).
@@ -150,7 +148,6 @@ Non-blocking follow-ups identified while implementing v0.5b-i. Each is additive 
 - [ ] **Autotag / prune-refs config mutation.** `git_remote_set_autotag`, `git_remote_prune_refs`.
 - [ ] **Task-aware cancellation.** `Task.cancel()` wired to abort an in-flight fetch. v0.5b-i supports cancel-via-transferProgress-returning-false only.
 - [ ] **Shallow-clone helpers.** `unshallow()` sugar + assertions on the empirical `depth` error code when libgit2 rejects it over `file://`.
-- [ ] **`withTemporaryDirectoryAsync` hoist.** `RemoteConcurrencyTests.swift` adds a fourth private copy. Hoist threshold long crossed; pull into `Tests/Git2Tests/Support/` on the next sweep. (Shared with the v0.5a-ii TODO of the same name.)
 - [ ] **Shallow-fetch empirical assertion.** `RemoteFetchTests.fetch_depth_producesShallowRepoOrCleanReject` currently accepts either success or any libgit2 rejection. Tighten to the empirical code/class once libgit2 1.9.x behavior over `file://` is pinned.
 - [ ] **GitHub integration-test wrong-password retry.** The spec anticipated a "first call wrong, second call right" retry test; not landed in v0.5b-i because libgit2's retry behavior on GitHub 401 response is empirically flaky (sometimes retries, sometimes immediately fails). Revisit with a stable retry contract.
 - [ ] **TSan environment fix.** macOS 25.3 / Xcode 26.3 refuse to load `libclang_rt.tsan_osx_dynamic.dylib` due to a platform-policy code-signature rejection. The `RemoteConcurrencyTests` smoke-test therefore validates serialization under normal execution only; TSan coverage blocked by toolchain, not by wrapper code. Revisit when the Xcode / OS combination accepts the sanitizer runtime.
