@@ -19,6 +19,11 @@ extension Repository {
         /// - Returns: `true` to continue, `false` to cancel. On cancel,
         ///   the enclosing `push` throws ``GitError/Code/user`` /
         ///   ``GitError/Class/callback``.
+        /// - Important: Runs synchronously on the push thread with the
+        ///   repository lock held. Do **not** call `repository.*` from
+        ///   inside — doing so deadlocks on `os_unfair_lock`. Dispatch UI
+        ///   updates via `Task { @MainActor in ... }` rather than synchronous
+        ///   main-actor calls.
         public typealias PushTransferProgressHandler =
             @Sendable (_ current: Int, _ total: Int, _ bytes: Int) -> Bool
 
@@ -28,6 +33,7 @@ extension Repository {
         ///   - status: `nil` means the server accepted the update.
         ///     Non-`nil` is the server-supplied rejection reason
         ///     (e.g. `"non-fast-forward"`).
+        /// - Important: Same re-entrancy rules as `PushTransferProgressHandler`.
         public typealias PushUpdateReferenceHandler =
             @Sendable (_ refname: String, _ status: String?) -> Void
 
