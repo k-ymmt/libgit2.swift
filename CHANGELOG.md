@@ -55,6 +55,15 @@ Versioning follows SemVer with the usual `0.x` caveat: the API is not yet stable
 - `Repository.PushOptions` — struct with `@Sendable` closure fields (`credentials`, `certificateCheck`, `pushTransferProgress`, `pushUpdateReference`) plus `followRedirects` / `customHeaders` scalars. `credentials` / `certificateCheck` typealiases are shared with `FetchOptions`.
 - `Remote.push(refspecs:options:)` — wraps `git_remote_push`. Per-ref server rejections over HTTP / SSH transports (non-fast-forward via server response, pre-receive hook, protected branches) are collected via `push_update_reference` during the call and surfaced as a single `GitError(code: .user, class: .reference)` with a semicolon-delimited `refname: status` message. libgit2's local `file://` transport short-circuits non-fast-forward directly to `GitError(code: .nonFastForward, class: .reference)` without invoking the callback; both paths are observable. Callers that want programmatic per-ref results set `options.pushUpdateReference`.
 - `Repository.push(remoteNamed:refspecs:options:)` — sugar over `lookupRemote` + `Remote.push`.
+- `Repository.create(at:bare:initialBranch:)` — wraps
+  `git_repository_init_ext` with `GIT_REPOSITORY_INIT_MKPATH` pre-set
+  so missing path components are created automatically. Mirrors
+  `Repository.open(at:)`. `bare: false`, `initialBranch: nil`
+  defaults. Passing `nil` delegates initial-branch resolution to
+  libgit2 (`init.defaultBranch` config, fallback `"master"`).
+  Reinitializing an existing repository is idempotent: config is
+  re-applied, existing objects / refs / HEAD are preserved unless
+  `initialBranch` is passed to retarget HEAD.
 
 ## [0.2.0] — TBD
 

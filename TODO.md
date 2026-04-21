@@ -43,7 +43,7 @@ Non-blocking follow-ups identified while designing v0.4a. Each is an additive, n
 - [ ] **Signed commits** — `commit(...)` overload wrapping `git_commit_create_with_signature`.
 - [ ] **`message_encoding:` parameter** on `commit(...)`. v0.4a passes `nil` to libgit2 (treat as UTF-8).
 - [ ] **TestFixture `TreeEntryDescription` migration.** v0.4a leaves `TreeEntryDescription.mode` as `git_filemode_t`; swap it for the public `TreeEntry.FileMode` to drop the final `@testable` `Cgit2` dependency from the fixture layer.
-- [ ] **`import Cgit2` in v0.4a test files.** `RepositoryBlobsTests`, `RepositoryTreesTests`, `RepositoryCommitsTests`, `RepositoryBranchesTests`, `RepositoryTagsTests`, and `WriteConcurrencyTests` each call `git_repository_init` + `git_repository_free` directly to set up an empty repo. Remove the import once repository initialization itself is exposed as a public API (separate slice — v0.4a intentionally does not cover repo creation).
+- [ ] **`import Cgit2` in test fixture / other test files.** After v0.5c-i migrated the `git_repository_init` call sites (`RepositoryBlobsTests`, `RepositoryTreesTests`, `RepositoryCommitsTests`, `RepositoryBranchesTests`, `RepositoryTagsTests`, `WriteConcurrencyTests` all dropped their `import Cgit2`), the remaining `import Cgit2` holders in `Tests/Git2Tests/` are `Support/TestFixture.swift`, `TestFixture+Merge.swift`, `TestFixture+Rebase.swift`, `TestFixtureTests.swift`, and individual test files under `Checkout/`, `Cherrypick/`, `Concurrency/`, `Diff/`, `Errors/`, `Index/`, `Merge/`, `Objects/`, `Rebase/`, `Reference/`, `Remote/`, `Repository/`, `Values/`, and `Walker/`. These use Cgit2 for `git_filemode_t`, `git_index_*` with stage encoding, `git_oid_*`, `GitError.fromLibgit2`, and similar low-level symbols that have no public wrapper yet. Full cleanup belongs with the public-API surfacing work that replaces each low-level use.
 - [ ] **`ReferenceDeleteTests.secondDeleteThrows` only asserts the error type.** Tighten to `#expect(error.code == .notFound)` (`git_reference_delete` on a missing ref is documented as `GIT_ENOTFOUND`). Aligns with spec §9.2 error-code specificity.
 - [ ] **`tree(entries:)` duplicate check is String-based.** The `Set<String>` guard treats Unicode NFC vs NFD variants of the same logical name as duplicates, while libgit2 would byte-compare and accept them. Unlikely to bite in practice, but document the assumption or normalize the names before insertion.
 - [ ] **FileMode integration coverage for `.link` / `.commit`.** `TreeEntryFileModeRawTests` covers every case as a unit, and `TreeTests` covers `.blob` / `.blobExecutable`. Add a `tree(entries:)` integration test that round-trips a symbolic-link and a submodule-commit entry through the ODB once the fixture layer supports them more conveniently.
@@ -114,6 +114,50 @@ Non-blocking follow-ups identified while implementing v0.5a-ii. Each is additive
 - [ ] **`ontoName` / `origHeadName` asymmetry.** libgit2 strips `refs/heads/` from `git_rebase_onto_name` but keeps the full canonical path in `git_rebase_orig_head_name`. v0.5a-ii surfaces libgit2's behavior unchanged. Normalizing this at the Swift layer (e.g. always returning the canonical form) would diverge from the spec's "thin wrapper" policy; revisit if the asymmetry becomes a UX issue.
 - [ ] **`RebaseConcurrencyTests` sanity assertion.** The parallel test currently only asserts "doesn't crash"; adding `#expect(rebase.operationCount == 3)` after the task group would tighten the guarantee that metadata reads still return correct values under contention.
 
+## Deferred from v0.5c-i (repository init slice)
+
+Non-blocking follow-ups identified while implementing v0.5c-i. Each
+is additive and non-breaking, and can be revisited when a concrete
+use case appears.
+
+- [ ] **`Repository.InitOptions` value type.** Introduced when two or
+  more advanced knobs (`sharedMode`, `templatePath`, `originURL`,
+  `description`, `failIfExists`) land together. The scalar-argument
+  `create(at:bare:initialBranch:)` stays as a convenience overload.
+- [ ] **`failIfExists: Bool` (`GIT_REPOSITORY_INIT_NO_REINIT`).**
+  Surfaces only if a caller wants "fail if already initialized"
+  semantics beyond what `FileManager.fileExists(atPath:)` can check
+  pre-call.
+- [ ] **Shared mode (`GIT_REPOSITORY_INIT_SHARED_UMASK` / `_GROUP` /
+  `_ALL`).** Permission-bit control for multi-user server hosting.
+- [ ] **External template path (`GIT_REPOSITORY_INIT_EXTERNAL_TEMPLATE`
+  + `template_path`).** Custom init templates.
+- [ ] **`origin_url`.** Auto-create an `origin` remote during init.
+  Trivially composed today via `create` + `createRemote(named:url:)`.
+- [ ] **`workdir_path` + `RELATIVE_GITLINK`.** Non-natural working
+  trees via gitlink file. Pairs with a future worktree slice.
+- [ ] **`description` file write.** GitWeb / cgit cosmetic.
+- [ ] **`refdb_type`.** libgit2 supports `files` and `reftable`;
+  this slice surfaces only the default (`files`). XCFramework
+  currently ships without `reftable` support.
+- [ ] **SHA-256 repositories (`oid_type`).** Gated on
+  `EXPERIMENTAL_SHA256=ON` at XCFramework build time — tracked
+  under the existing SHA-256 TODO.
+- [ ] **`initial_head` ref-format validation.** libgit2 1.9.0's
+  `git_repository_init_ext` performs no validation on the
+  `initial_head` field — any string is written directly to HEAD.
+  `create_unusualInitialBranch_isAcceptedVerbatim` locks this
+  behavior in. If an API consumer wants an early rejection, a
+  Swift-layer pre-check (`git_reference_name_is_valid` + throw
+  `GitError(.invalidSpec, .reference)`) could be added additively,
+  diverging from the thin-wrapper policy for a safer surface.
+- [ ] **`Repository.pull` porcelain (v0.5c-ii).** Composition of
+  `fetch(remoteNamed:)` → `annotatedCommit(for:)` → `mergeAnalysis`
+  → `merge(branchNamed:)` dispatch. Open design questions:
+  rebase-style vs merge-style, analysis result exposure, conflict
+  surface, auto-commit on `.normal` merge (blocked on the v0.5a-i
+  "auto-commit porcelain" deferred item).
+
 ## Deferred from v0.5b-ii (network — push)
 
 Non-blocking follow-ups identified while implementing v0.5b-ii. Each is additive and non-breaking, and can be revisited when a concrete use case appears.
@@ -164,7 +208,6 @@ Non-blocking follow-ups identified while implementing v0.5b-i. Each is additive 
 
 Gaps identified when auditing the wrapper against standard `git` commands after v0.5b-ii shipped. Each item is a candidate for its own slice with a spec + plan; the wrapper already ships every ingredient these porcelains compose.
 
-- [ ] **`Repository.create(at:bare:)` / `Repository.init(at:)`.** Public wrapper over `git_repository_init` (and `git_repository_init_ext` once options — bare, template path, initial branch, shared mode — are worth surfacing). Today, tests that need a fresh repo fall back to `@testable import Cgit2` + direct `git_repository_init` calls (see the v0.4a deferred `import Cgit2` in test files item). Landing this closes that test-layer dependency too. Needs a small spec covering: public vs bare signature, `GIT_REPOSITORY_INIT_MKPATH` default, HEAD initialization, and whether to also surface `git_repository_init_options.initial_head` for non-default branch names.
 - [ ] **`Repository.pull(remoteNamed:branchNamed:options:)` porcelain.** Composition of `fetch(remoteNamed:)` → `annotatedCommit(for: origin/branch ref)` → `mergeAnalysis` → `merge(branchNamed:)` dispatch. All primitives exist. Slice boundary questions: rebase-style pull vs merge-style (flag on options), whether to expose the analysis result to the caller, conflict surface, and whether to auto-commit on the `.normal` merge path (blocked on the v0.5a-i "auto-commit porcelain" deferred item — the pull porcelain likely lands *after* that, or intentionally requires the caller to handle the merge commit themselves).
 
 ## Potential future directions (unscoped)
