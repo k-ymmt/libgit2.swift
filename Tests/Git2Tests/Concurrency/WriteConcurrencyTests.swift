@@ -1,7 +1,6 @@
 import Testing
 import Foundation
 @testable import Git2
-import Cgit2
 
 extension RuntimeSensitiveTests {
     @Suite(.serialized)
@@ -12,14 +11,7 @@ extension RuntimeSensitiveTests {
             defer { try? Git.shutdown() }
 
             try await withTemporaryDirectory { dir in
-                var raw: OpaquePointer?
-                dir.withUnsafeFileSystemRepresentation { path in
-                    _ = git_repository_init(&raw, path, 0)
-                }
-                guard let raw else { Issue.record("init failed"); return }
-                git_repository_free(raw)
-
-                let repo = try Repository.open(at: dir)
+                let repo = try Repository.create(at: dir)
 
                 // Seed an initial commit so parents: [seed] works in tasks.
                 let seedBlob = try repo.createBlob(data: Data("seed".utf8))

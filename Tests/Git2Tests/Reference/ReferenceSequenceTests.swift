@@ -1,7 +1,6 @@
 import Testing
 import Foundation
 @testable import Git2
-import Cgit2
 
 extension RuntimeSensitiveTests {
     @Suite(.serialized)
@@ -39,16 +38,7 @@ extension RuntimeSensitiveTests {
             defer { try? Git.shutdown() }
 
             try withTemporaryDirectory { dir in
-                // init a bare-ish repo without any commits
-                var repoHandle: OpaquePointer?
-                let rInit: Int32 = dir.withUnsafeFileSystemRepresentation { path in
-                    guard let path else { return -1 }
-                    return git_repository_init(&repoHandle, path, 0)
-                }
-                #expect(rInit == 0)
-                defer { git_repository_free(repoHandle!) }
-
-                let repo = try Repository.open(at: dir)
+                let repo = try Repository.create(at: dir)
                 let names = repo.references().map(\.name)
                 #expect(names.isEmpty)
             }
