@@ -86,6 +86,32 @@ struct RemotePushTests {
         }
     }
 
+    @Test func push_deleteRemoteRef_removesRefOnUpstream() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let fx = try LocalRemoteFixture.make(in: dir)
+            let down = try Repository.open(at: fx.downstreamURL)
+            let remote = try down.createRemote(named: "origin", url: fx.upstreamURLString)
+            try remote.fetch()
+
+            // Set up a local branch + push to create refs/heads/feature
+            // on the upstream.
+            let tip = try down.commit(for: fx.seedOIDs.last!)
+            try down.createBranch(named: "feature", at: tip, force: false)
+            try remote.push(refspecs: [Refspec("refs/heads/feature:refs/heads/feature")])
+
+            // Precondition: feature exists on upstream.
+            let up = try Repository.open(at: fx.upstreamURL)
+            #expect(try up.reference(named: "refs/heads/feature") != nil)
+
+            // Delete via :refname refspec.
+            try remote.push(refspecs: [Refspec(":refs/heads/feature")])
+
+            let up2 = try Repository.open(at: fx.upstreamURL)
+            #expect(try up2.reference(named: "refs/heads/feature") == nil)
+        }
+    }
+
     @Test func push_forcePush_rewritesUpstream() throws {
         try Git.bootstrap(); defer { try? Git.shutdown() }
         try withTemporaryDirectory { dir in
