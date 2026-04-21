@@ -152,4 +152,48 @@ struct RemotePushTests {
             #expect(try ref.target == forcedCommit.oid)
         }
     }
+
+    @Test func push_nonFastForward_localTransport_throwsNonFastForward() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let fx = try LocalRemoteFixture.make(in: dir)
+            let down = try Repository.open(at: fx.downstreamURL)
+            let remote = try down.createRemote(named: "origin", url: fx.upstreamURLString)
+            try remote.fetch()
+
+            // Divergent commit from root — not a descendant of upstream's tip.
+            let rootOID = fx.seedOIDs.first!
+            let root = try down.commit(for: rootOID)
+            try down.createBranch(named: "main", at: root, force: false)
+            try down.setHead(referenceName: "refs/heads/main")
+            let blobOID = try down.createBlob(data: Data("diverged\n".utf8))
+            let tree = try down.tree(entries: [
+                .init(name: "README.md", oid: blobOID, filemode: .blob)
+            ])
+            _ = try down.commit(
+                tree: tree,
+                parents: [root],
+                author: Signature(
+                    name: "A", email: "a@example.com",
+                    date: Date(timeIntervalSince1970: 1_700_000_400),
+                    timeZone: TimeZone(identifier: "UTC")!
+                ),
+                message: "diverged",
+                updatingRef: "refs/heads/main"
+            )
+
+            do {
+                try remote.push(refspecs: [Refspec("refs/heads/main:refs/heads/main")])
+                Issue.record("expected push to throw on non-fast-forward")
+            } catch let error as GitError {
+                // libgit2's file:// transport returns GIT_ENONFASTFORWARD
+                // directly from git_remote_push — the push_update_reference
+                // callback is NOT invoked, so the rejection-synthesis path
+                // in Remote.push (which fires on HTTP/SSH where push_update_reference
+                // is the sole reject signal) is unreachable here.
+                #expect(error.code  == .nonFastForward)
+                #expect(error.class == .reference)
+            }
+        }
+    }
 }
