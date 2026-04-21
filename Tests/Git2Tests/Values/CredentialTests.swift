@@ -72,4 +72,19 @@ struct CredentialTests {
             git_credential_free(UnsafeMutablePointer<git_credential>(out))
         }
     }
+
+    @Test func equatable_sameCaseAndValuesEqual() {
+        #expect(Credential.userPass(username: "u", password: "p") == .userPass(username: "u", password: "p"))
+        #expect(Credential.default == .default)
+        #expect(Credential.username("u") == .username("u"))
+    }
+
+    @Test func equatable_differentValuesUnequal() {
+        #expect(Credential.userPass(username: "u", password: "p") != .userPass(username: "u", password: "q"))
+        #expect(Credential.username("a") != .username("b"))
+    }
+
+    @Test func equatable_differentCasesUnequal() {
+        #expect(Credential.default != .username(""))
+    }
 }

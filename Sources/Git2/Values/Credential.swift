@@ -4,7 +4,7 @@ import Cgit2
 ///
 /// v0.5b-i ships HTTPS-facing cases only; SSH credentials are out of scope
 /// while the XCFramework is built with `USE_SSH=OFF`.
-public enum Credential: Sendable {
+public enum Credential: Sendable, Equatable {
     /// Plain-text username and password. The typical HTTPS case —
     /// for GitHub, use `username: "x-access-token"` with a Personal
     /// Access Token as the password.
@@ -25,11 +25,12 @@ public enum Credential: Sendable {
     /// The libgit2 credential-type bitmask passed to the credentials
     /// callback. Only the HTTPS-relevant bits are exposed; SSH bits are
     /// deferred.
-    public struct AllowedTypes: OptionSet, Sendable {
+    public struct AllowedTypes: OptionSet, Sendable, Equatable {
         public let rawValue: UInt32
         public init(rawValue: UInt32) { self.rawValue = rawValue }
 
         public static let userpassPlaintext = AllowedTypes(rawValue: 1 << 0)
+        /// NTLM / Kerberos "default" credential type bit. Mirrors the ``Credential/default`` case.
         public static let `default`         = AllowedTypes(rawValue: 1 << 3)
         public static let username          = AllowedTypes(rawValue: 1 << 5)
     }
