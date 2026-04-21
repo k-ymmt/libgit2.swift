@@ -37,5 +37,41 @@ extension RuntimeSensitiveTests {
                 #expect(repo.workingDirectory == nil)
             }
         }
+
+        @Test
+        func create_initialBranch_writesSymbolicRef() throws {
+            try Git.bootstrap(); defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let target = dir.appendingPathComponent("repo")
+                let repo = try Repository.create(
+                    at: target,
+                    initialBranch: "main"
+                )
+
+                let headURL = repo.gitDirectory.appendingPathComponent("HEAD")
+                let head = try String(contentsOf: headURL, encoding: .utf8)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                #expect(head == "ref: refs/heads/main")
+            }
+        }
+
+        @Test
+        func create_defaultInitialBranch_respectsLibgit2Default() throws {
+            try Git.bootstrap(); defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                let target = dir.appendingPathComponent("repo")
+                let repo = try Repository.create(at: target)
+
+                let headURL = repo.gitDirectory.appendingPathComponent("HEAD")
+                let head = try String(contentsOf: headURL, encoding: .utf8)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                // Exact branch name depends on init.defaultBranch in the
+                // environment's gitconfig. Accept any refs/heads/<x> that
+                // libgit2 chose.
+                #expect(head.hasPrefix("ref: refs/heads/"))
+            }
+        }
     }
 }
