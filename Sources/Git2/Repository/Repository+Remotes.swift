@@ -57,6 +57,43 @@ extension Repository {
 }
 
 extension Repository {
+    /// Wraps `git_remote_set_url`.
+    public func setRemoteURL(named name: String, to url: String) throws(GitError) {
+        try lock.withLock { () throws(GitError) in
+            try check(git_remote_set_url(handle, name, url))
+        }
+    }
+
+    /// Wraps `git_remote_set_pushurl`. Pass `nil` to clear the push URL
+    /// (push then falls back to the fetch URL).
+    public func setRemotePushURL(named name: String, to url: String?) throws(GitError) {
+        try lock.withLock { () throws(GitError) in
+            if let url {
+                try check(git_remote_set_pushurl(handle, name, url))
+            } else {
+                // libgit2 accepts NULL to clear.
+                try check(git_remote_set_pushurl(handle, name, nil))
+            }
+        }
+    }
+
+    /// Wraps `git_remote_add_fetch`. Appends to the remote's configured
+    /// fetch refspec list.
+    public func addFetchRefspec(remoteNamed name: String, refspec: Refspec) throws(GitError) {
+        try lock.withLock { () throws(GitError) in
+            try check(git_remote_add_fetch(handle, name, refspec.string))
+        }
+    }
+
+    /// Wraps `git_remote_add_push`.
+    public func addPushRefspec(remoteNamed name: String, refspec: Refspec) throws(GitError) {
+        try lock.withLock { () throws(GitError) in
+            try check(git_remote_add_push(handle, name, refspec.string))
+        }
+    }
+}
+
+extension Repository {
     /// Wraps `git_remote_delete`. Removes the `[remote "<name>"]` config
     /// block and any `refs/remotes/<name>/*` tracking refs.
     public func deleteRemote(named name: String) throws(GitError) {

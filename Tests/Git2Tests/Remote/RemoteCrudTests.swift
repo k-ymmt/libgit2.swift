@@ -184,4 +184,57 @@ struct RemoteCrudTests {
             }
         }
     }
+
+    @Test func setRemoteURL_roundTrips() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let repo = try initRepo(at: dir)
+            _ = try repo.createRemote(named: "origin", url: "https://example.com/a.git")
+            try repo.setRemoteURL(named: "origin", to: "https://example.com/b.git")
+            let reopened = try repo.lookupRemote(named: "origin")
+            #expect(reopened.url == "https://example.com/b.git")
+        }
+    }
+
+    @Test func setRemotePushURL_setsAndClears() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let repo = try initRepo(at: dir)
+            _ = try repo.createRemote(named: "origin", url: "https://example.com/a.git")
+            try repo.setRemotePushURL(named: "origin", to: "https://example.com/push.git")
+            #expect(try repo.lookupRemote(named: "origin").pushURL == "https://example.com/push.git")
+            try repo.setRemotePushURL(named: "origin", to: nil)
+            #expect(try repo.lookupRemote(named: "origin").pushURL == nil)
+        }
+    }
+
+    @Test func addFetchRefspec_appendsToExistingList() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let repo = try initRepo(at: dir)
+            _ = try repo.createRemote(named: "origin", url: "https://example.com/a.git")
+            try repo.addFetchRefspec(
+                remoteNamed: "origin",
+                refspec: Refspec("+refs/tags/*:refs/tags/*")
+            )
+            let reopened = try repo.lookupRemote(named: "origin")
+            let specs = try reopened.fetchRefspecs
+            #expect(specs.contains(Refspec("+refs/heads/*:refs/remotes/origin/*")))
+            #expect(specs.contains(Refspec("+refs/tags/*:refs/tags/*")))
+        }
+    }
+
+    @Test func addPushRefspec_appendsToPushList() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let repo = try initRepo(at: dir)
+            _ = try repo.createRemote(named: "origin", url: "https://example.com/a.git")
+            try repo.addPushRefspec(
+                remoteNamed: "origin",
+                refspec: Refspec("refs/heads/main:refs/heads/main")
+            )
+            let reopened = try repo.lookupRemote(named: "origin")
+            #expect(try reopened.pushRefspecs == [Refspec("refs/heads/main:refs/heads/main")])
+        }
+    }
 }
