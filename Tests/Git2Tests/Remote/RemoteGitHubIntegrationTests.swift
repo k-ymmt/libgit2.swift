@@ -2,7 +2,6 @@ import Testing
 import Foundation
 import os
 @testable import Git2
-import Cgit2
 
 /// Env-gated. Set `ENABLE_GITHUB_INTEGRATION_TESTS=1` to run. Requires
 /// `gh` CLI on `$PATH` with a `repo`-scoped auth session.
@@ -54,15 +53,7 @@ struct RemoteGitHubIntegrationTests {
         defer { Self.teardown(fx) }
 
         try withTemporaryDirectory { dir in
-            var raw: OpaquePointer?
-            let rc: Int32 = dir.withUnsafeFileSystemRepresentation { p in
-                guard let p else { return -1 }
-                return git_repository_init(&raw, p, 0)
-            }
-            #expect(rc == 0)
-            git_repository_free(raw!)
-
-            let repo = try Repository.open(at: dir)
+            let repo = try Repository.create(at: dir)
             let remote = try repo.createRemote(named: "origin", url: fx.repo_url)
             let counters = Counters()
             var opts = Repository.FetchOptions()
@@ -98,15 +89,7 @@ struct RemoteGitHubIntegrationTests {
         defer { Self.teardown(fx) }
 
         try withTemporaryDirectory { dir in
-            var raw: OpaquePointer?
-            let rc: Int32 = dir.withUnsafeFileSystemRepresentation { p in
-                guard let p else { return -1 }
-                return git_repository_init(&raw, p, 0)
-            }
-            #expect(rc == 0)
-            git_repository_free(raw!)
-
-            let repo = try Repository.open(at: dir)
+            let repo = try Repository.create(at: dir)
             let remote = try repo.createRemote(named: "origin", url: fx.repo_url)
             var opts = Repository.FetchOptions()
             opts.credentials = { _, _, _ in
@@ -129,15 +112,7 @@ struct RemoteGitHubIntegrationTests {
     private static func cloneToLocal(fixture fx: Fixture, localDir: URL)
         throws -> (Repository, OID)
     {
-        var raw: OpaquePointer?
-        let rc: Int32 = localDir.withUnsafeFileSystemRepresentation { p in
-            guard let p else { return -1 }
-            return git_repository_init(&raw, p, 0)
-        }
-        #expect(rc == 0)
-        git_repository_free(raw!)
-
-        let repo = try Repository.open(at: localDir)
+        let repo = try Repository.create(at: localDir)
         let remote = try repo.createRemote(named: "origin", url: fx.repo_url)
         var fetchOpts = Repository.FetchOptions()
         fetchOpts.credentials = { _, _, _ in
