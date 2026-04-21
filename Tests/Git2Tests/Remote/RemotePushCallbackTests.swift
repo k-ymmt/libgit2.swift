@@ -71,6 +71,24 @@ struct RemotePushCallbackTests {
             }
         }
     }
+
+    @Test func pushUpdateReference_firesOnAcceptedRef() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let (_, remote, _, _) = try makePushable(dir: dir)
+            let collected = CollectedUpdates()
+            var opts = Repository.PushOptions()
+            opts.pushUpdateReference = { refname, status in
+                collected.append(refname: refname, status: status)
+            }
+            try remote.push(
+                refspecs: [Refspec("refs/heads/main:refs/heads/main")],
+                options: opts
+            )
+            let all = collected.snapshot()
+            #expect(all.contains(where: { $0.refname == "refs/heads/main" && $0.status == nil }))
+        }
+    }
 }
 
 // MARK: - test support
@@ -85,4 +103,13 @@ private final class PushProgressCounter: @unchecked Sendable {
             if total > s.maxTotal { s.maxTotal = total }
         }
     }
+}
+
+private final class CollectedUpdates: @unchecked Sendable {
+    struct Entry: Sendable { let refname: String; let status: String? }
+    private let state = OSAllocatedUnfairLock<[Entry]>(initialState: [])
+    func append(refname: String, status: String?) {
+        state.withLock { $0.append(Entry(refname: refname, status: status)) }
+    }
+    func snapshot() -> [Entry] { state.withLock { $0 } }
 }
