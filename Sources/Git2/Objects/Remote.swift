@@ -123,6 +123,77 @@ extension Remote {
     }
 }
 
+extension Remote {
+    /// Wraps `git_remote_push`. Uploads new objects from the local ODB to
+    /// the remote and advances the refs named by `refspecs`. Holds the
+    /// repository lock across the entire network round-trip.
+    ///
+    /// - Parameters:
+    ///   - refspecs: Pass `nil` (default) to use the remote's configured
+    ///     push refspecs (most remotes have none and will push nothing).
+    ///     Pass `[Refspec("refs/heads/main:refs/heads/main")]` for a
+    ///     normal push, `[Refspec("+refs/heads/main:refs/heads/main")]`
+    ///     for force push, or `[Refspec(":refs/heads/obsolete")]` to
+    ///     delete a remote ref.
+    ///   - options: Callbacks and scalar settings. Callbacks are
+    ///     invoked synchronously on the push thread; do not reach
+    ///     back into `repository.*` from inside them.
+    /// - Throws: ``GitError``. Per-ref server rejections (non-fast-forward,
+    ///   pre-receive hook rejection, protected-branch rules) are
+    ///   collected during the call and re-thrown as
+    ///   ``GitError/Code/callback`` / ``GitError/Class/reference`` with a
+    ///   semicolon-delimited `refname: status` message. Callers that
+    ///   need programmatic per-ref results should supply
+    ///   `options.pushUpdateReference` and collect state inside that
+    ///   closure — the synthesized message is not a machine-readable
+    ///   contract.
+    public func push(
+        refspecs: [Refspec]? = nil,
+        options: Repository.PushOptions = Repository.PushOptions()
+    ) throws(GitError) {
+        try repository.lock.withLock { () throws(GitError) in
+            try withRemoteCallbacks(options) { cbsPtr, ctx throws(GitError) in
+                var pushOpts = git_push_options()
+                let initRC = git_push_options_init(&pushOpts, UInt32(GIT_PUSH_OPTIONS_VERSION))
+                precondition(initRC == 0)
+                pushOpts.callbacks        = cbsPtr.pointee
+                pushOpts.follow_redirects = options.followRedirects.asGit
+
+                let specs = refspecs?.map(\.string) ?? []
+                let rc: Int32 = try withGitStrArray(specs) { (specsPtr: UnsafePointer<git_strarray>?) throws(GitError) -> Int32 in
+                    return try withGitStrArray(options.customHeaders) { (headersPtr: UnsafePointer<git_strarray>?) throws(GitError) -> Int32 in
+                        if let headersPtr {
+                            pushOpts.custom_headers = headersPtr.pointee
+                        }
+                        return git_remote_push(self.handle, specsPtr, &pushOpts)
+                    }
+                }
+
+                // Order: captured closure error > libgit2 rc > collected rejections.
+                if let captured = ctx.capturedError {
+                    if let gitErr = captured as? GitError { throw gitErr }
+                    throw GitError(
+                        code: .user,
+                        class: .callback,
+                        message: String(describing: captured)
+                    )
+                }
+                try check(rc)
+                if !ctx.pushRejections.isEmpty {
+                    let detail = ctx.pushRejections
+                        .map { "\($0.refname): \($0.status)" }
+                        .joined(separator: "; ")
+                    throw GitError(
+                        code: .user,
+                        class: .reference,
+                        message: "rejected: \(detail)"
+                    )
+                }
+            }
+        }
+    }
+}
+
 // MARK: - FetchOptions enum ↔ libgit2 bridges
 
 extension Repository.FetchOptions.PruneSetting {
