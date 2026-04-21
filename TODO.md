@@ -25,8 +25,7 @@ Items deferred from the v0.1.0 XCFramework implementation.
 
 1. **LICENSE file** — referenced from README; trivial cost and blocks nothing but should land before the first polished release.
 2. **GitHub Actions** — tag-push → build on a macOS runner → create release → attach zip. Removes the human from the release loop.
-3. **Swift wrapper v0.3 read-extensions — shipped.** Tree, Blob, Tag, polymorphic `Object`, tree-to-tree Diff, `Repository.discover(startingAt:)`, `Repository.references`, sortable `log(from:sorting:)`, public `RevWalk`.
-4. **SSH support** — only if a concrete use case appears.
+3. **SSH support** — only if a concrete use case appears.
 
 ## Deferred from v0.2.0 (Swift wrapper first slice)
 
@@ -85,7 +84,6 @@ Non-blocking follow-ups identified while designing v0.5a-i. Each is additive and
 - [ ] **`git_merge_file` / `_from_index`.** File-level 3-way merge with configurable drivers. Land when a UI or conflict-resolution use case needs sub-file control.
 - [ ] **`git_merge_bases` / `_bases_many` (plural).** Return all common ancestors, not just the single best one.
 - [ ] **`git_merge_analysis_for_ref`.** Analyze a merge into a non-HEAD ref.
-- [ ] **`git_annotated_commit_from_fetchhead`.** Lands with v0.5b remote support (fetchhead doesn't exist yet).
 - [ ] **`git_annotated_commit_from_revspec`.** Revspec is not yet a public surface; revisit if we expose revspec lookup.
 - [ ] **`MergeOptions` deeper fields.** `metric` (function pointer), `recursion_limit`, `default_driver`, `file_flags`.
 - [ ] **Octopus merge (`heads.count > 1`).** `merge(_ heads: [AnnotatedCommit], …)` rejects `heads.count != 1` today. The signature accepts an array for future compatibility.
@@ -117,6 +115,30 @@ Non-blocking follow-ups identified while implementing v0.5a-ii. Each is additive
 - [ ] **`withTemporaryDirectoryAsync` hoist.** `CheckoutConcurrencyTests.swift`, `MergeConcurrencyTests.swift`, and `RebaseConcurrencyTests.swift` each define their own private copy. Hoist trigger (three duplicates) is already met; pull into `Tests/Git2Tests/Support/` on the next sweep.
 - [ ] **`RebaseConcurrencyTests` sanity assertion.** The parallel test currently only asserts "doesn't crash"; adding `#expect(rebase.operationCount == 3)` after the task group would tighten the guarantee that metadata reads still return correct values under contention.
 
+## Deferred from v0.5b-i (network — fetch)
+
+Non-blocking follow-ups identified while implementing v0.5b-i. Each is additive and non-breaking, and can be revisited when a concrete use case appears.
+
+- [ ] **Push surface (v0.5b-ii).** `git_remote_push`, `Repository.PushOptions` (parallel to `FetchOptions`), `push_transfer_progress` / `push_negotiation` / `push_update_reference` callbacks. Deliberate split so the callback-bridge mechanism landed on fetch first.
+- [ ] **Remote primitive APIs.** `git_remote_connect` / `_connect_ext` / `_download` / `_update_tips` / `_upload` / `_disconnect` / `_stop` / `_ls` / `_connected` / `_prune`. v0.5b-i ships only the `fetch` porcelain.
+- [ ] **Proxy options.** `ProxyOptions` value type wrapping `git_proxy_options` (type + url + credentials + certificate_check) with `FetchOptions.proxy` / `PushOptions.proxy` fields. v0.5b-i is "no proxy".
+- [ ] **SSH credentials.** `Credential.sshKey` / `.sshCustom` / `.sshInteractive` / `.sshMemory` cases, landing with the SSH slice once libssh2 is bundled into the XCFramework (currently `USE_SSH=OFF`).
+- [ ] **Remote callbacks beyond the three in scope.** `sideband_progress`, `pack_progress`, `completion`, `update_refs` / `update_tips`, `remote_ready`, `resolve_url`. Unified "callbacks extension" slice covering both `FetchOptions` and `PushOptions`.
+- [ ] **Certificate detail.** `Certificate` value type exposing `git_cert *` contents (X.509 DER, hostkey fingerprints) so `CertificateCheckHandler` can inspect specifics. v0.5b-i hands the closure `host: String, isValid: Bool` only.
+- [ ] **Anonymous / detached remotes.** `git_remote_create_anonymous`, `_create_detached`. In-memory / detached-from-repo `Remote` instances.
+- [ ] **Remote creation flags.** `git_remote_create_with_opts` + `git_remote_create_options` (`GIT_REMOTE_CREATE_SKIP_INSTEADOF`, `_SKIP_DEFAULT_FETCHSPEC`).
+- [ ] **Remote instance mutation during connection.** `git_remote_set_instance_url` / `_instance_pushurl`. Paired with the deprecated `resolve_url` and the pending `remote_ready` callback.
+- [ ] **`git_remote_dup`.** Handle duplication.
+- [ ] **`git_remote_oid_type`.** Requires `EXPERIMENTAL_SHA256=ON` at XCFramework build time.
+- [ ] **Autotag / prune-refs config mutation.** `git_remote_set_autotag`, `git_remote_prune_refs`.
+- [ ] **Task-aware cancellation.** `Task.cancel()` wired to abort an in-flight fetch. v0.5b-i supports cancel-via-transferProgress-returning-false only.
+- [ ] **Shallow-clone helpers.** `unshallow()` sugar + assertions on the empirical `depth` error code when libgit2 rejects it over `file://`.
+- [ ] **`withTemporaryDirectoryAsync` hoist.** `RemoteConcurrencyTests.swift` adds a fourth private copy. Hoist threshold long crossed; pull into `Tests/Git2Tests/Support/` on the next sweep. (Shared with the v0.5a-ii TODO of the same name.)
+- [ ] **Shallow-fetch empirical assertion.** `RemoteFetchTests.fetch_depth_producesShallowRepoOrCleanReject` currently accepts either success or any libgit2 rejection. Tighten to the empirical code/class once libgit2 1.9.x behavior over `file://` is pinned.
+- [ ] **GitHub integration-test wrong-password retry.** The spec anticipated a "first call wrong, second call right" retry test; not landed in v0.5b-i because libgit2's retry behavior on GitHub 401 response is empirically flaky (sometimes retries, sometimes immediately fails). Revisit with a stable retry contract.
+- [ ] **TSan environment fix.** macOS 25.3 / Xcode 26.3 refuse to load `libclang_rt.tsan_osx_dynamic.dylib` due to a platform-policy code-signature rejection. The `RemoteConcurrencyTests` smoke-test therefore validates serialization under normal execution only; TSan coverage blocked by toolchain, not by wrapper code. Revisit when the Xcode / OS combination accepts the sanitizer runtime.
+- [ ] **`RemoteCallbackTests.credentials_throwingGitErrorPropagatesVerbatim` assertion loosening.** Currently accepts any `GitError` code because libgit2's behavior on a nonexistent `file://` path varies (sometimes resolves to `.notFound` without reaching the credentials callback). Tighten to `error.code == .auth` once we have a test fixture that reliably exercises the credentials-callback path over `file://` or uses a controlled local HTTP server.
+
 ## Deferred from v0.3.0 (Swift wrapper read extensions)
 
 - [ ] **`RevWalk.next()` holds the lock across `git_commit_lookup`.** The closure passed to `repository.lock.withLock` does (a) `git_revwalk_next` and (b) `git_commit_lookup` back-to-back. No deadlock in practice (the standard `while let c = try walk.next()` loop releases the lock between calls), but it serializes the lookup against every other repo operation and is a future trap if the lookup grows side effects. Worth revisiting when introducing additional throwing APIs that want to call into the public surface mid-walk.
@@ -131,36 +153,7 @@ Mirrors the roadmap in the v0.2.0 design spec §10.2
 Phase labels are non-binding — each slice will get its own spec before
 implementation.
 
-### v0.4 — write operations
-
-Split into two slices. v0.4a covers the ODB-write surface (blob / tree / commit creation, branch + tag create/delete, generic reference delete). v0.4b covers the filesystem-touching surface (index, checkout, HEAD manipulation). See the v0.4a spec under `docs/superpowers/specs/2026-04-20-git2-v0.4a-write-foundation-design.md`.
-
-#### v0.4b — index, checkout, HEAD
-
-Split into two slices. **v0.4b-i (index surface) is shipped** — see the spec under `docs/superpowers/specs/2026-04-20-git2-v0.4b-i-index-design.md`. v0.4b-ii covers the filesystem-touching surface (checkout, HEAD manipulation).
-
-##### v0.4b-ii — checkout, HEAD — shipped
-
-- [x] **Checkout** — `git_checkout_head` / `git_checkout_tree` / `git_checkout_index` with safety options.
-- [x] **HEAD manipulation** — `git_repository_set_head` / `git_repository_set_head_detached`, branch switching.
-
-### v0.5 — network & advanced
-
-Split across multiple slices.
-
-#### v0.5a-i — merge / cherry-pick — shipped
-
-- [x] **Merge primitives** — `AnnotatedCommit` handle, `mergeBase(of:and:)` / `(among:)`, `mergeAnalysis(against:)`, `mergeTrees(...)` / `mergeCommits(...)`.
-- [x] **Stateful merge** — low-level `merge([AnnotatedCommit])` + porcelain `merge(_ branch:)` / `merge(branchNamed:)` with fast-forward dispatch.
-- [x] **Cherry-pick** — `cherrypick(_:)` (stateful) + `cherrypickCommit(_:onto:mainline:)` (pure).
-- [x] **Repository state** — `state`, `message()`, `removeMessage()`, `cleanupState()`.
-- [x] **Annotated HEAD** — `setHead(detachedAtAnnotated:)`. See the spec under `docs/superpowers/specs/2026-04-20-git2-v0.5a-i-merge-cherrypick-design.md`.
-
-##### v0.5a-ii — rebase — shipped
-
-- [x] **Rebase handle** — `git_rebase_init` / `git_rebase_open`, `Rebase.next()` / `.commit()` iteration, `finish()` / `abort()` termination, metadata (`operationCount` / `currentOperationIndex` / `operation(at:)` / `origHeadName` / `origHeadOid` / `ontoName` / `ontoOid`), in-memory mode + `inMemoryIndex()`, `RebaseOptions`. See the spec under `docs/superpowers/specs/2026-04-20-git2-v0.5a-ii-rebase-design.md`.
-
-#### v0.5b — network
+### v0.5b — network
 
 - [ ] **Remote / fetch / push** (HTTPS). Callbacks for credentials surfaced to the user; no UI.
 

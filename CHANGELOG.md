@@ -34,6 +34,24 @@ Versioning follows SemVer with the usual `0.x` caveat: the API is not yet stable
 - `Rebase.operationCount`, `Rebase.currentOperationIndex`, `Rebase.operation(at:)`, `Rebase.origHeadName`, `Rebase.origHeadOid`, `Rebase.ontoName`, `Rebase.ontoOid` — metadata accessors over `git_rebase_operation_entrycount` / `_current` / `_byindex` / `_orig_head_*` / `_onto_*`.
 - `Rebase.inMemoryIndex() -> Index` — wraps `git_rebase_inmemory_index`. Only valid on a rebase started with `RebaseOptions.inMemory = true`.
 - `Repository.RebaseOptions` + `RebaseOperation` (`struct`) + `RebaseOperation.Kind` (`enum`) — value types for rebase configuration and operation-list inspection.
+- `Refspec` — `public struct Refspec: Sendable, Hashable`, opaque string wrapper for fetch / push refspecs.
+- `Credential` — `public enum Credential: Sendable, Equatable` with `.userPass(username:password:)`, `.default`, `.username(_:)` cases. Nested `Credential.AllowedTypes: OptionSet, Sendable, Equatable` surfaces the HTTPS-relevant `git_credential_t` bits (`.userpassPlaintext`, `.default`, `.username`).
+- `CertificateVerdict` — `public enum CertificateVerdict: Sendable, Equatable` with `.accept`, `.reject`, `.passthrough`.
+- `TransferProgress` — `public struct TransferProgress: Sendable` mirroring `git_indexer_progress` with `fractionCompleted` convenience.
+- `Repository.FetchOptions` — struct with `@Sendable` closure fields (`credentials`, `certificateCheck`, `transferProgress`) plus `prune` / `updateFetchHead` / `downloadTags` / `depth` / `followRedirects` / `customHeaders` scalars. Nested `PruneSetting` / `AutotagOption` / `RedirectPolicy` enums.
+- `Remote` — public handle wrapping `git_remote *`. Frees in `deinit`. Read-only `name`, `url`, `pushURL`, `fetchRefspecs`, `pushRefspecs`, `defaultBranch()`, plus `fetch(refspecs:options:reflogMessage:)`.
+- `Repository.createRemote(named:url:)` / `.createRemote(named:url:fetchspec:)` — wrap `git_remote_create` / `_create_with_fetchspec`.
+- `Repository.lookupRemote(named:)` — wraps `git_remote_lookup`.
+- `Repository.remotes()` — wraps `git_remote_list`.
+- `Repository.deleteRemote(named:)` — wraps `git_remote_delete`.
+- `Repository.renameRemote(from:to:)` — wraps `git_remote_rename`; returns the problem-refspec list.
+- `Repository.isValidRemoteName(_:)` (static) — wraps `git_remote_name_is_valid`.
+- `Repository.setRemoteURL(named:to:)` — wraps `git_remote_set_url`.
+- `Repository.setRemotePushURL(named:to:)` — wraps `git_remote_set_pushurl`; `nil` clears.
+- `Repository.addFetchRefspec(remoteNamed:refspec:)` — wraps `git_remote_add_fetch`.
+- `Repository.addPushRefspec(remoteNamed:refspec:)` — wraps `git_remote_add_push`.
+- `Repository.fetch(remoteNamed:refspecs:options:reflogMessage:)` — sugar over `lookupRemote` + `Remote.fetch`.
+- `Repository.annotatedCommit(fromFetchHead:remoteURL:oid:)` — wraps `git_annotated_commit_from_fetchhead`. Closes the v0.5a-i deferral that blocked on `FETCH_HEAD` existing.
 
 ## [0.2.0] — TBD
 
