@@ -160,18 +160,7 @@ Non-blocking follow-ups identified while implementing v0.5b-i. Each is additive 
 - [ ] **`Object.wrap` default-branch test.** The `default:` arm in `Object.wrap` frees the handle and throws `.invalid` / `.object` for any `git_object_t` outside the four user-level kinds. In a healthy libgit2 build this branch is unreachable from the public API, but a regression test that hands `wrap` a synthetic non-standard `git_object_type` would lock in the leak-safety guarantee.
 - [ ] **`ObjectKindTests` uses numeric literals (`5`, `6`) for delta types.** `GIT_OBJECT_OFS_DELTA` / `GIT_OBJECT_REF_DELTA` are not in the public Cgit2 surface (they live in libgit2's packfile internals). The test asserts the mapping by passing `git_object_t(5)` / `git_object_t(6)` directly. If libgit2 ever renumbers those internals the test silently shifts meaning. Either drop those two `#expect` lines (the `default:` branch is already exercised by `ANY` and `INVALID`) or reach into a libgit2 internal header to pull the constants honestly.
 
-## Future wrapper slices (planned post-v0.2.0)
-
-Mirrors the roadmap in the v0.2.0 design spec §10.2
-(`docs/superpowers/specs/2026-04-20-git2-swift-wrapper-foundation-design.md`).
-Phase labels are non-binding — each slice will get its own spec before
-implementation.
-
-### v0.5b — network
-
-- [ ] **Remote / fetch / push** (HTTPS). Callbacks for credentials surfaced to the user; no UI.
-
-### Potential future directions (unscoped)
+## Potential future directions (unscoped)
 
 - [ ] **Async / actor-based high-level API.** During v0.2.0 brainstorming we picked `@unchecked Sendable` + synchronous + internal lock over an `actor Repository`. Reconsider if a compelling async-first use case shows up (e.g. SwiftUI views that want to observe repo state without blocking).
 - [ ] **Benchmarks.** Spec §9.4 notes that performance under large histories is not measured. Worth standing up a `swift-package-manager-plugin` or a simple benchmark target when a concrete regression is suspected.
