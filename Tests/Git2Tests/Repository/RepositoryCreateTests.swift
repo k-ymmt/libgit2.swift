@@ -73,5 +73,27 @@ extension RuntimeSensitiveTests {
                 #expect(head.hasPrefix("ref: refs/heads/"))
             }
         }
+
+        @Test
+        func create_nonExistentParentPath_mkpath_createsIntermediates() throws {
+            try Git.bootstrap(); defer { try? Git.shutdown() }
+
+            try withTemporaryDirectory { dir in
+                // Build a nested target whose parents do not yet exist.
+                let deep = dir
+                    .appendingPathComponent("a")
+                    .appendingPathComponent("b")
+                    .appendingPathComponent("c")
+
+                let repo = try Repository.create(at: deep)
+                #expect(repo.isBare == false)
+
+                // Verify intermediate components actually exist on disk.
+                let fm = FileManager.default
+                #expect(fm.fileExists(atPath: dir.appendingPathComponent("a").path))
+                #expect(fm.fileExists(atPath: dir.appendingPathComponent("a/b").path))
+                #expect(fm.fileExists(atPath: deep.path))
+            }
+        }
     }
 }
