@@ -86,7 +86,7 @@ private func remoteBridge_credentials(
         }
     } catch {
         ctx.capturedError = error
-        return -1
+        return Int32(GIT_EUSER.rawValue)
     }
 }
 
@@ -118,5 +118,5 @@ private func remoteBridge_transfer(
     let ctx = Unmanaged<RemoteCallbackContext>.fromOpaque(payload).takeUnretainedValue()
     guard let handler = ctx.transferProgress else { return 0 }
     let carry = handler(TransferProgress(stats.pointee))
-    return carry ? 0 : -1
+    return carry ? 0 : Int32(GIT_EUSER.rawValue)
 }

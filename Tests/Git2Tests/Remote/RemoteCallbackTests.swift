@@ -34,11 +34,7 @@ struct RemoteCallbackTests {
                 try remote.fetch(options: opts)
                 Issue.record("expected fetch to throw")
             } catch let error as GitError {
-                // Depending on libgit2 version, the trampoline returning -1
-                // surfaces as .user (GIT_EUSER) or .unknown(-1) (GIT_ERROR).
-                // Both prove that returning false from the handler cancels the
-                // fetch and surfaces an error at the call site.
-                #expect(error.code == .user || error.code == .unknown(-1))
+                #expect(error.code == .user)
             }
         }
     }
