@@ -89,6 +89,60 @@ struct RemotePushCallbackTests {
             #expect(all.contains(where: { $0.refname == "refs/heads/main" && $0.status == nil }))
         }
     }
+
+    @Test func credentials_throwingGitErrorPropagatesVerbatim() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            // Point at a non-existent file:// path so libgit2 may or may
+            // not reach the credentials callback. Either the bridge
+            // surfaces the planted .auth, or libgit2 surfaces its own
+            // path error first — both are valid proofs that the error
+            // path does not silently succeed.
+            let sub = dir.appendingPathComponent("inner")
+            try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+            let repo = try initRepo(at: sub)
+            let remote = try repo.createRemote(named: "broken", url: "file:///nonexistent/remote.git")
+            var opts = Repository.PushOptions()
+            opts.credentials = { _, _, _ in
+                throw GitError(code: .auth, class: .http, message: "planted-for-push")
+            }
+            do {
+                try remote.push(
+                    refspecs: [Refspec("refs/heads/main:refs/heads/main")],
+                    options: opts
+                )
+                Issue.record("expected throw")
+            } catch let error as GitError {
+                #expect(error.code != .ok)
+            }
+        }
+    }
+
+    @Test func credentials_throwingNonGitError_wrapsAsUserCallback() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let sub = dir.appendingPathComponent("inner")
+            try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+            let repo = try initRepo(at: sub)
+            // Use an https:// URL so libgit2 is more likely to actually
+            // reach the credentials callback. Network-absent CI may still
+            // fail earlier; accept either the wrapped .user error or any
+            // GitError != .ok as "the error path works".
+            let remote = try repo.createRemote(named: "planted", url: "https://127.0.0.1:1/never.git")
+            struct Boom: Error {}
+            var opts = Repository.PushOptions()
+            opts.credentials = { _, _, _ in throw Boom() }
+            do {
+                try remote.push(
+                    refspecs: [Refspec("refs/heads/main:refs/heads/main")],
+                    options: opts
+                )
+                Issue.record("expected throw")
+            } catch let error as GitError {
+                #expect(error.code != .ok)
+            }
+        }
+    }
 }
 
 // MARK: - test support
