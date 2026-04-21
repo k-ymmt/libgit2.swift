@@ -62,11 +62,3 @@ extension RuntimeSensitiveTests {
         }
     }
 }
-
-private func withTemporaryDirectoryAsync<T>(_ body: (URL) async throws -> T) async rethrows -> T {
-    let base = URL.temporaryDirectory
-        .appendingPathComponent("Git2Tests-\(UUID().uuidString)", isDirectory: true)
-    try! FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: base) }
-    return try await body(base)
-}

@@ -34,17 +34,3 @@ struct RemotePushConcurrencyTests {
         }
     }
 }
-
-// Until the hoisted `withTemporaryDirectoryAsync` TODO is addressed in
-// Task 11 (see plan), mirror the private helper used by
-// CheckoutConcurrencyTests / MergeConcurrencyTests / RebaseConcurrencyTests /
-// RemoteConcurrencyTests.
-private func withTemporaryDirectoryAsync<R>(
-    _ body: (URL) async throws -> R
-) async throws -> R {
-    let dir = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
-    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: dir) }
-    return try await body(dir)
-}
