@@ -32,7 +32,8 @@ let package = Package(
         ),
         .testTarget(
             name: "Git2Tests",
-            dependencies: ["Git2"]
+            dependencies: ["Git2"],
+            exclude: ["Support/Scripts"]
         ),
     ]
 )
