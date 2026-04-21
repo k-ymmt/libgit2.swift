@@ -8,14 +8,7 @@ struct TestFixture {
     /// Initializes a fresh non-bare repo at `directory` and returns an open
     /// ``Repository``. Private helper for the other factories.
     private static func initAndOpen(at directory: URL) throws -> Repository {
-        var repoHandle: OpaquePointer?
-        let rInit: Int32 = directory.withUnsafeFileSystemRepresentation { path in
-            guard let path else { return -1 }
-            return git_repository_init(&repoHandle, path, 0)
-        }
-        guard rInit == 0, let repoHandle else { throw GitError.fromLibgit2(rInit) }
-        git_repository_free(repoHandle)
-        return try Repository.open(at: directory)
+        try Repository.create(at: directory)
     }
 
     /// Creates a linear history in `directory`.

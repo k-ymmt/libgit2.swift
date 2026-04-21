@@ -1,6 +1,5 @@
 import Foundation
-@testable import Git2
-import Cgit2
+import Git2
 
 /// Two-repo fixture for testing `file://` fetch.
 ///
@@ -29,15 +28,7 @@ struct LocalRemoteFixture {
         let downstream = parentDir.appendingPathComponent("downstream")
 
         // 1. Init a bare upstream + seed it with commits.
-        var upRaw: OpaquePointer?
-        let upRC: Int32 = upstream.withUnsafeFileSystemRepresentation { p in
-            guard let p else { return -1 }
-            return git_repository_init(&upRaw, p, 1)  // is_bare = 1
-        }
-        guard upRC == 0, let upRaw else { throw GitError.fromLibgit2(upRC) }
-        git_repository_free(upRaw)
-
-        let upRepo = try Repository.open(at: upstream)
+        let upRepo = try Repository.create(at: upstream, bare: true)
         var oids: [OID] = []
         var previous: Commit? = nil
         for i in 0..<seedCommitCount {
@@ -59,13 +50,7 @@ struct LocalRemoteFixture {
         }
 
         // 2. Init an empty non-bare downstream.
-        var downRaw: OpaquePointer?
-        let downRC: Int32 = downstream.withUnsafeFileSystemRepresentation { p in
-            guard let p else { return -1 }
-            return git_repository_init(&downRaw, p, 0)
-        }
-        guard downRC == 0, let downRaw else { throw GitError.fromLibgit2(downRC) }
-        git_repository_free(downRaw)
+        _ = try Repository.create(at: downstream)
 
         return LocalRemoteFixture(
             upstreamURL: upstream,
