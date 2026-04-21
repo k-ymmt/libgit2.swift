@@ -55,3 +55,31 @@ extension Repository {
         return rc == 0 && out != 0
     }
 }
+
+extension Repository {
+    /// Wraps `git_remote_delete`. Removes the `[remote "<name>"]` config
+    /// block and any `refs/remotes/<name>/*` tracking refs.
+    public func deleteRemote(named name: String) throws(GitError) {
+        try lock.withLock { () throws(GitError) in
+            try check(git_remote_delete(handle, name))
+        }
+    }
+
+    /// Wraps `git_remote_rename`. Returns refspecs libgit2 could not
+    /// rewrite automatically (typically refspecs that do not mention
+    /// the old name). Empty array means a clean rename.
+    @discardableResult
+    public func renameRemote(from oldName: String, to newName: String)
+        throws(GitError) -> [String]
+    {
+        try lock.withLock { () throws(GitError) -> [String] in
+            var arr = git_strarray()
+            try check(git_remote_rename(&arr, handle, oldName, newName))
+            defer { git_strarray_dispose(&arr) }
+            return (0..<arr.count).compactMap { i -> String? in
+                guard let cstr = arr.strings[i] else { return nil }
+                return String(cString: cstr)
+            }
+        }
+    }
+}

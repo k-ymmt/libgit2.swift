@@ -119,4 +119,69 @@ struct RemoteCrudTests {
     @Test func isValidRemoteName_rejectsEmpty() {
         #expect(!Repository.isValidRemoteName(""))
     }
+
+    @Test func deleteRemote_removesEntry() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let repo = try initRepo(at: dir)
+            _ = try repo.createRemote(named: "origin", url: "https://example.com/a.git")
+            try repo.deleteRemote(named: "origin")
+            #expect(try repo.remotes() == [])
+        }
+    }
+
+    @Test func deleteRemote_missingThrowsNotFound() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let repo = try initRepo(at: dir)
+            do {
+                try repo.deleteRemote(named: "missing")
+                Issue.record("expected throw")
+            } catch let error as GitError {
+                #expect(error.code == .notFound)
+            }
+        }
+    }
+
+    @Test func renameRemote_updatesConfigEntry() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let repo = try initRepo(at: dir)
+            _ = try repo.createRemote(named: "origin", url: "https://example.com/a.git")
+            let problems = try repo.renameRemote(from: "origin", to: "upstream")
+            #expect(problems == [])
+            #expect(try repo.remotes() == ["upstream"])
+        }
+    }
+
+    @Test func renameRemote_nonstandardRefspecReturnsProblemList() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let repo = try initRepo(at: dir)
+            // A refspec that does not mention the remote name cannot be
+            // auto-rewritten; libgit2 returns it in the problems array.
+            _ = try repo.createRemote(
+                named: "origin",
+                url: "https://example.com/a.git",
+                fetchspec: "+refs/heads/main:refs/heads/main"
+            )
+            let problems = try repo.renameRemote(from: "origin", to: "upstream")
+            #expect(problems.contains("+refs/heads/main:refs/heads/main"))
+        }
+    }
+
+    @Test func renameRemote_collidesThrowsExists() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let repo = try initRepo(at: dir)
+            _ = try repo.createRemote(named: "origin",   url: "https://example.com/a.git")
+            _ = try repo.createRemote(named: "upstream", url: "https://example.com/b.git")
+            do {
+                _ = try repo.renameRemote(from: "origin", to: "upstream")
+                Issue.record("expected throw")
+            } catch let error as GitError {
+                #expect(error.code == .exists)
+            }
+        }
+    }
 }
