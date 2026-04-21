@@ -133,3 +133,15 @@ extension Repository {
         try remote.fetch(refspecs: refspecs, options: options, reflogMessage: reflogMessage)
     }
 }
+
+extension Repository {
+    /// Sugar over ``lookupRemote(named:)`` + ``Remote/push(refspecs:options:)``.
+    public func push(
+        remoteNamed name: String,
+        refspecs: [Refspec]? = nil,
+        options: PushOptions = PushOptions()
+    ) throws(GitError) {
+        let remote = try lookupRemote(named: name)
+        try remote.push(refspecs: refspecs, options: options)
+    }
+}

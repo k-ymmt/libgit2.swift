@@ -45,4 +45,44 @@ struct RemotePushTests {
             #expect(try ref.target == newCommit.oid)
         }
     }
+
+    @Test func pushSugar_advancesUpstreamMain() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let fx = try LocalRemoteFixture.make(in: dir)
+            let down = try Repository.open(at: fx.downstreamURL)
+            _ = try down.createRemote(named: "origin", url: fx.upstreamURLString)
+            try down.fetch(remoteNamed: "origin")
+
+            let tipOID = fx.seedOIDs.last!
+            try down.createBranch(named: "main", at: try down.commit(for: tipOID), force: false)
+            try down.setHead(referenceName: "refs/heads/main")
+
+            let tipCommit = try down.commit(for: tipOID)
+            let blobOID = try down.createBlob(data: Data("via-sugar\n".utf8))
+            let tree = try down.tree(entries: [
+                .init(name: "README.md", oid: blobOID, filemode: .blob)
+            ])
+            let newCommit = try down.commit(
+                tree: tree,
+                parents: [tipCommit],
+                author: Signature(
+                    name: "A", email: "a@example.com",
+                    date: Date(timeIntervalSince1970: 1_700_000_200),
+                    timeZone: TimeZone(identifier: "UTC")!
+                ),
+                message: "via sugar",
+                updatingRef: "refs/heads/main"
+            )
+
+            try down.push(
+                remoteNamed: "origin",
+                refspecs: [Refspec("refs/heads/main:refs/heads/main")]
+            )
+
+            let up = try Repository.open(at: fx.upstreamURL)
+            let ref = try #require(try up.reference(named: "refs/heads/main"))
+            #expect(try ref.target == newCommit.oid)
+        }
+    }
 }
