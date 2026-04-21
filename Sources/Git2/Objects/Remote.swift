@@ -141,9 +141,11 @@ extension Remote {
     /// - Throws: ``GitError``. Per-ref server rejections (non-fast-forward,
     ///   pre-receive hook rejection, protected-branch rules) are
     ///   collected during the call and re-thrown as
-    ///   ``GitError/Code/callback`` / ``GitError/Class/reference`` with a
-    ///   semicolon-delimited `refname: status` message. Callers that
-    ///   need programmatic per-ref results should supply
+    ///   ``GitError/Code/user`` / ``GitError/Class/reference`` with a
+    ///   semicolon-delimited `refname: status` message. (`Code/callback`
+    ///   is not a valid case; `.user` parallels libgit2's `GIT_EUSER`
+    ///   mapping used on the fetch path for closure-originated errors.)
+    ///   Callers that need programmatic per-ref results should supply
     ///   `options.pushUpdateReference` and collect state inside that
     ///   closure — the synthesized message is not a machine-readable
     ///   contract.
