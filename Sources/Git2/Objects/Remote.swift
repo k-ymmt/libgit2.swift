@@ -30,6 +30,36 @@ public final class Remote: @unchecked Sendable {
 }
 
 extension Remote {
+    /// Wraps `git_remote_get_fetch_refspecs`.
+    public var fetchRefspecs: [Refspec] {
+        get throws(GitError) {
+            try readRefspecs(via: git_remote_get_fetch_refspecs)
+        }
+    }
+
+    /// Wraps `git_remote_get_push_refspecs`.
+    public var pushRefspecs: [Refspec] {
+        get throws(GitError) {
+            try readRefspecs(via: git_remote_get_push_refspecs)
+        }
+    }
+
+    private func readRefspecs(
+        via libgit2Call: (UnsafeMutablePointer<git_strarray>, OpaquePointer) -> Int32
+    ) throws(GitError) -> [Refspec] {
+        try repository.lock.withLock { () throws(GitError) -> [Refspec] in
+            var arr = git_strarray()
+            try check(libgit2Call(&arr, handle))
+            defer { git_strarray_dispose(&arr) }
+            return (0..<arr.count).compactMap { i -> Refspec? in
+                guard let cstr = arr.strings[i] else { return nil }
+                return Refspec(String(cString: cstr))
+            }
+        }
+    }
+}
+
+extension Remote {
     /// Wraps `git_remote_name`. `nil` for in-memory / anonymous remotes
     /// (v0.5b-i does not produce these; nullability mirrors libgit2).
     public var name: String? {
