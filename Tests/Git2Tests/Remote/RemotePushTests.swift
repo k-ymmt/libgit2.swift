@@ -85,4 +85,45 @@ struct RemotePushTests {
             #expect(try ref.target == newCommit.oid)
         }
     }
+
+    @Test func push_forcePush_rewritesUpstream() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let fx = try LocalRemoteFixture.make(in: dir)
+            let down = try Repository.open(at: fx.downstreamURL)
+            let remote = try down.createRemote(named: "origin", url: fx.upstreamURLString)
+            try remote.fetch()
+
+            // Rewind downstream main to the root commit, then create a
+            // divergent commit. The new OID will not be a descendant of
+            // upstream's tip, so a non-force push would be rejected.
+            let rootOID = fx.seedOIDs.first!
+            let root = try down.commit(for: rootOID)
+            try down.createBranch(named: "main", at: root, force: false)
+            try down.setHead(referenceName: "refs/heads/main")
+
+            let blobOID = try down.createBlob(data: Data("forced\n".utf8))
+            let tree = try down.tree(entries: [
+                .init(name: "README.md", oid: blobOID, filemode: .blob)
+            ])
+            let forcedCommit = try down.commit(
+                tree: tree,
+                parents: [root],
+                author: Signature(
+                    name: "A", email: "a@example.com",
+                    date: Date(timeIntervalSince1970: 1_700_000_300),
+                    timeZone: TimeZone(identifier: "UTC")!
+                ),
+                message: "forced commit",
+                updatingRef: "refs/heads/main"
+            )
+
+            // Force push.
+            try remote.push(refspecs: [Refspec("+refs/heads/main:refs/heads/main")])
+
+            let up = try Repository.open(at: fx.upstreamURL)
+            let ref = try #require(try up.reference(named: "refs/heads/main"))
+            #expect(try ref.target == forcedCommit.oid)
+        }
+    }
 }
