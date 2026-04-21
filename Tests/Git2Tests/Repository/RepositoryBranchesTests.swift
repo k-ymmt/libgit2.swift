@@ -1,21 +1,13 @@
 import Testing
 import Foundation
 @testable import Git2
-import Cgit2
 
 extension RuntimeSensitiveTests {
     @Suite(.serialized)
     struct RepositoryBranchesTests {
         /// Create an empty repo, make one commit on HEAD, return (repo, commit).
         private func makeRepoWithInitialCommit(_ dir: URL) throws -> (Repository, Commit) {
-            var raw: OpaquePointer?
-            dir.withUnsafeFileSystemRepresentation { path in
-                _ = git_repository_init(&raw, path, 0)
-            }
-            guard let raw else { throw GitError(code: .invalid, class: .invalid, message: "init failed") }
-            git_repository_free(raw)
-
-            let repo = try Repository.open(at: dir)
+            let repo = try Repository.create(at: dir)
             let blobOID = try repo.createBlob(data: Data("x".utf8))
             let tree = try repo.tree(entries: [.init(name: "x", oid: blobOID, filemode: .blob)])
             let commit = try repo.commit(

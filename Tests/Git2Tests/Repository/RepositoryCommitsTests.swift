@@ -1,21 +1,13 @@
 import Testing
 import Foundation
 @testable import Git2
-import Cgit2
 
 extension RuntimeSensitiveTests {
     @Suite(.serialized)
     struct RepositoryCommitsTests {
         /// Initialize an empty repo, open it, and create a README blob + tree.
         private func makeRepoWithReadmeTree(_ dir: URL) throws -> (Repository, Tree) {
-            var raw: OpaquePointer?
-            dir.withUnsafeFileSystemRepresentation { path in
-                _ = git_repository_init(&raw, path, 0)
-            }
-            guard let raw else { throw GitError(code: .invalid, class: .invalid, message: "init failed") }
-            git_repository_free(raw)
-
-            let repo = try Repository.open(at: dir)
+            let repo = try Repository.create(at: dir)
             let blobOID = try repo.createBlob(data: Data("hello\n".utf8))
             let tree = try repo.tree(entries: [
                 .init(name: "README.md", oid: blobOID, filemode: .blob)

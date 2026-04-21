@@ -1,7 +1,6 @@
 import Testing
 import Foundation
 @testable import Git2
-import Cgit2
 
 extension RuntimeSensitiveTests {
     @Suite(.serialized)
@@ -9,14 +8,7 @@ extension RuntimeSensitiveTests {
         /// Creates an empty repository (no initial commit) and returns an open
         /// Repository plus a `README` blob OID.
         private func makeRepoWithReadmeBlob(_ dir: URL) throws -> (Repository, OID) {
-            var raw: OpaquePointer?
-            dir.withUnsafeFileSystemRepresentation { path in
-                _ = git_repository_init(&raw, path, 0)
-            }
-            guard let raw else { throw GitError(code: .invalid, class: .invalid, message: "init failed") }
-            git_repository_free(raw)
-
-            let repo = try Repository.open(at: dir)
+            let repo = try Repository.create(at: dir)
             let blob = try repo.createBlob(data: Data("hello\n".utf8))
             return (repo, blob)
         }

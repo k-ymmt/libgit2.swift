@@ -1,7 +1,6 @@
 import Testing
 import Foundation
 @testable import Git2
-import Cgit2
 
 // These tests call `Git.bootstrap()` / `Git.shutdown()` and so must run serially
 // with any other test that touches the runtime lifecycle. They are nested under
@@ -35,11 +34,7 @@ extension RuntimeSensitiveTests {
             defer { try? Git.shutdown() }
 
             try withTemporaryDirectory { dir in
-                var raw: OpaquePointer?
-                try dir.withUnsafeFileSystemRepresentation { path in
-                    #expect(git_repository_init(&raw, path, 0) == 0)
-                }
-                git_repository_free(raw)
+                _ = try Repository.create(at: dir)
 
                 let repo = try Repository.open(at: dir)
                 do {
