@@ -110,45 +110,63 @@ extension Repository {
 }
 
 extension Repository {
-    /// Shared body for ``merge(_:mergeOptions:checkoutOptions:)`` and
-    /// ``merge(branchNamed:mergeOptions:checkoutOptions:)``. Assumes the
+    /// Shared body for ``merge(_:mergeOptions:checkoutOptions:)``,
+    /// ``merge(branchNamed:mergeOptions:checkoutOptions:)``, and
+    /// ``merge(against:mergeOptions:checkoutOptions:)``. Assumes the
     /// caller already holds the lock.
     ///
     /// - Parameters:
-    ///   - branchHandle: a `git_reference *` to the ref being merged. Caller
-    ///     retains ownership.
+    ///   - annotated: a pre-built ``AnnotatedCommit`` naming the merge
+    ///     target. Caller retains ownership (the handle must stay live
+    ///     until this call returns).
     ///   - mergeOptions / checkoutOptions: forwarded unchanged.
     /// - Returns: the analysis bits describing which dispatch path ran.
     private func performMerge(
-        branchHandle: OpaquePointer,
+        annotated: AnnotatedCommit,
         mergeOptions: MergeOptions,
         checkoutOptions: CheckoutOptions
     ) throws(GitError) -> MergeAnalysis {
-        // 1. Build an annotated commit (ref-provenance).
-        var acPtr: OpaquePointer?
-        try check(git_annotated_commit_from_ref(&acPtr, handle, branchHandle))
-        defer { git_annotated_commit_free(acPtr) }
-
-        // 2. Analyze.
+        // 1. Analyze.
         var analysisRaw = git_merge_analysis_t(0)
         var prefRaw = git_merge_preference_t(0)
-        var heads: [OpaquePointer?] = [acPtr]
+        var heads: [OpaquePointer?] = [annotated.handle]
         let analysisResult: Int32 = heads.withUnsafeMutableBufferPointer { buf in
             git_merge_analysis(&analysisRaw, &prefRaw, handle, buf.baseAddress, buf.count)
         }
         try check(analysisResult)
         let analysis = MergeAnalysis(rawValue: analysisRaw.rawValue)
 
-        // 3. Dispatch.
+        // 2. Dispatch.
         if analysis.contains(.upToDate) {
             return analysis
         }
 
         if analysis.contains(.unborn) {
-            // Attach HEAD to the branch, then checkoutHead against the tree
-            // that now lives there.
-            let namePtr = git_reference_name(branchHandle)!
-            try check(git_repository_set_head(handle, namePtr))
+            // HEAD is unborn. Read HEAD's symbolic target (e.g.
+            // "refs/heads/main"), create that branch at the fetched OID,
+            // then attach HEAD + checkout.
+            var headRef: OpaquePointer?
+            try check(git_reference_lookup(&headRef, handle, "HEAD"))
+            defer { git_reference_free(headRef) }
+            guard git_reference_type(headRef) == GIT_REFERENCE_SYMBOLIC,
+                  let symbolicTargetPtr = git_reference_symbolic_target(headRef) else {
+                throw GitError(
+                    code: .unbornBranch, class: .reference,
+                    message: "cannot resolve unborn HEAD's symbolic target"
+                )
+            }
+            let targetName = String(cString: symbolicTargetPtr)
+
+            let oidPtr = git_annotated_commit_id(annotated.handle)!
+            var branchRef: OpaquePointer?
+            try check(targetName.withCString { namePtr in
+                git_reference_create(&branchRef, handle, namePtr, oidPtr, 0, nil)
+            })
+            git_reference_free(branchRef)
+
+            try check(targetName.withCString { namePtr in
+                git_repository_set_head(handle, namePtr)
+            })
             try checkoutOptions.withCOptions { optsPtr throws(GitError) in
                 try check(git_checkout_head(handle, optsPtr))
             }
@@ -156,24 +174,39 @@ extension Repository {
         }
 
         if analysis.contains(.fastForward) {
-            // Peel the branch, checkout its tree, then point HEAD at the
-            // branch ref.
+            // Peel via the AnnotatedCommit's OID, checkout the tree, then
+            // update HEAD's ref (attached) or move detached HEAD. Mirrors
+            // libgit2's examples/merge.c pattern.
+            let oidPtr = git_annotated_commit_id(annotated.handle)!
             var commitPtr: OpaquePointer?
-            try check(git_reference_peel(&commitPtr, branchHandle, GIT_OBJECT_COMMIT))
+            try check(git_object_lookup(&commitPtr, handle, oidPtr, GIT_OBJECT_COMMIT))
             defer { git_object_free(commitPtr) }
 
             try checkoutOptions.withCOptions { optsPtr throws(GitError) in
                 try check(git_checkout_tree(handle, commitPtr, optsPtr))
             }
-            let namePtr = git_reference_name(branchHandle)!
-            try check(git_repository_set_head(handle, namePtr))
+
+            let detached = git_repository_head_detached(handle) == 1
+            if detached {
+                var oidCopy = oidPtr.pointee
+                try check(git_repository_set_head_detached(handle, &oidCopy))
+            } else {
+                // HEAD is symbolic → update the current branch's target.
+                var currentHead: OpaquePointer?
+                try check(git_repository_head(&currentHead, handle))
+                defer { git_reference_free(currentHead) }
+                var newRef: OpaquePointer?
+                var oidCopy = oidPtr.pointee
+                try check(git_reference_set_target(&newRef, currentHead, &oidCopy, nil))
+                git_reference_free(newRef)
+            }
             return analysis
         }
 
         // Normal: git_merge updates working tree + index + writes MERGE_HEAD/MSG.
         try mergeOptions.withCOptions { mPtr throws(GitError) in
             try checkoutOptions.withCOptions { cPtr throws(GitError) in
-                var headPtrs: [OpaquePointer?] = [acPtr]
+                var headPtrs: [OpaquePointer?] = [annotated.handle]
                 let r: Int32 = headPtrs.withUnsafeMutableBufferPointer { buf in
                     git_merge(handle, buf.baseAddress, buf.count, mPtr, cPtr)
                 }
@@ -201,8 +234,9 @@ extension Repository {
         checkoutOptions: CheckoutOptions = CheckoutOptions()
     ) throws(GitError) -> MergeAnalysis {
         try lock.withLock { () throws(GitError) -> MergeAnalysis in
-            try performMerge(
-                branchHandle: branch.handle,
+            let annotated = try annotatedCommitLocked(for: branch)
+            return try performMerge(
+                annotated: annotated,
                 mergeOptions: mergeOptions,
                 checkoutOptions: checkoutOptions
             )
@@ -224,10 +258,12 @@ extension Repository {
                 git_branch_lookup(&refHandle, handle, namePtr, GIT_BRANCH_LOCAL)
             }
             try check(lookup)
-            defer { git_reference_free(refHandle) }
+            // Wrap in Reference so deinit frees the handle.
+            let reference = Reference(handle: refHandle!, repository: self)
 
+            let annotated = try annotatedCommitLocked(for: reference)
             return try performMerge(
-                branchHandle: refHandle!,
+                annotated: annotated,
                 mergeOptions: mergeOptions,
                 checkoutOptions: checkoutOptions
             )
