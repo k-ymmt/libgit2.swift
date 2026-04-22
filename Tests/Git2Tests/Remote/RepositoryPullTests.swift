@@ -61,6 +61,12 @@ struct RepositoryPullTests {
 
             #expect(result.contains(.fastForward))
             #expect(try repo.head().target == advancedTip)
+            // Confirm the branch ref itself moved (not just HEAD via
+            // symbolic follow). Complement of pull_detachedHead_movesHeadOnly,
+            // which asserts the branch ref DID NOT move when HEAD was
+            // detached.
+            let branchRef = try #require(try repo.reference(named: "refs/heads/main"))
+            #expect(try branchRef.target == advancedTip)
             let mergeHeadURL = fx.downstreamURL.appendingPathComponent(".git/MERGE_HEAD")
             #expect(!FileManager.default.fileExists(atPath: mergeHeadURL.path))
         }
