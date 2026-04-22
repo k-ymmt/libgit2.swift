@@ -186,10 +186,11 @@ extension Repository {
                 try check(git_checkout_tree(handle, commitPtr, optsPtr))
             }
 
-            let detached = git_repository_head_detached(handle) == 1
+            let detachedRc = git_repository_head_detached(handle)
+            try check(detachedRc)
+            let detached = detachedRc == 1
             if detached {
-                var oidCopy = oidPtr.pointee
-                try check(git_repository_set_head_detached(handle, &oidCopy))
+                try check(git_repository_set_head_detached_from_annotated(handle, annotated.handle))
             } else {
                 // HEAD is symbolic → update the current branch's target.
                 var currentHead: OpaquePointer?
