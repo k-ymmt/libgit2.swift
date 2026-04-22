@@ -177,6 +177,14 @@ extension Repository {
             // Peel via the AnnotatedCommit's OID, checkout the tree, then
             // update HEAD's ref (attached) or move detached HEAD. Mirrors
             // libgit2's examples/merge.c pattern.
+            //
+            // Dispatch strategy:
+            // • If the annotated commit carries ref provenance (created from a
+            //   Reference), update the current branch's target so HEAD stays
+            //   attached and the symbolic ref advances with the fast-forward.
+            // • If there is no ref provenance (OID-only lookup, FETCH_HEAD
+            //   origin, etc.), use set_head_detached_from_annotated so that
+            //   the reflog records the provenance correctly and HEAD detaches.
             let oidPtr = git_annotated_commit_id(annotated.handle)!
             var commitPtr: OpaquePointer?
             try check(git_object_lookup(&commitPtr, handle, oidPtr, GIT_OBJECT_COMMIT))
@@ -186,20 +194,27 @@ extension Repository {
                 try check(git_checkout_tree(handle, commitPtr, optsPtr))
             }
 
-            let detachedRc = git_repository_head_detached(handle)
-            try check(detachedRc)
-            let detached = detachedRc == 1
-            if detached {
-                try check(git_repository_set_head_detached_from_annotated(handle, annotated.handle))
-            } else {
+            let hasRefProvenance = git_annotated_commit_ref(annotated.handle) != nil
+            if hasRefProvenance {
                 // HEAD is symbolic → update the current branch's target.
-                var currentHead: OpaquePointer?
-                try check(git_repository_head(&currentHead, handle))
-                defer { git_reference_free(currentHead) }
-                var newRef: OpaquePointer?
-                var oidCopy = oidPtr.pointee
-                try check(git_reference_set_target(&newRef, currentHead, &oidCopy, nil))
-                git_reference_free(newRef)
+                let currentHeadDetached = git_repository_head_detached(handle)
+                try check(currentHeadDetached)
+                if currentHeadDetached == 1 {
+                    // Already detached — use set_head_detached_from_annotated.
+                    try check(git_repository_set_head_detached_from_annotated(handle, annotated.handle))
+                } else {
+                    var currentHead: OpaquePointer?
+                    try check(git_repository_head(&currentHead, handle))
+                    defer { git_reference_free(currentHead) }
+                    var newRef: OpaquePointer?
+                    var oidCopy = oidPtr.pointee
+                    try check(git_reference_set_target(&newRef, currentHead, &oidCopy, nil))
+                    git_reference_free(newRef)
+                }
+            } else {
+                // No ref provenance (OID lookup / FETCH_HEAD): detach HEAD at
+                // the annotated commit so reflog entries use the correct origin.
+                try check(git_repository_set_head_detached_from_annotated(handle, annotated.handle))
             }
             return analysis
         }
@@ -264,6 +279,39 @@ extension Repository {
 
             let annotated = try annotatedCommitLocked(for: reference)
             return try performMerge(
+                annotated: annotated,
+                mergeOptions: mergeOptions,
+                checkoutOptions: checkoutOptions
+            )
+        }
+    }
+
+    /// Porcelain merge against a pre-built ``AnnotatedCommit``. Analyzes
+    /// the merge, then dispatches on the analysis bits the same way as
+    /// ``merge(_:mergeOptions:checkoutOptions:)-Reference``. Closes the
+    /// surface gap where ``AnnotatedCommit`` was the only merge input
+    /// that could not drive analysis + dispatch.
+    ///
+    /// The entire analysis → dispatch sequence runs inside a single lock
+    /// section — no other task observes a mid-merge state.
+    ///
+    /// - Parameters:
+    ///   - annotated: The merge target. Typically produced by
+    ///     ``annotatedCommit(for:)-Reference``,
+    ///     ``annotatedCommit(for:)-OID``, ``annotatedCommit(from:)``, or
+    ///     ``annotatedCommit(fromFetchHead:remoteURL:oid:)``.
+    ///   - mergeOptions: Merge rename / favor / recursion options.
+    ///   - checkoutOptions: Checkout options applied on the
+    ///     `.fastForward`, `.unborn`, and `.normal` dispatch paths.
+    /// - Returns: The analysis bits describing which dispatch path ran.
+    @discardableResult
+    public func merge(
+        against annotated: AnnotatedCommit,
+        mergeOptions: MergeOptions = MergeOptions(),
+        checkoutOptions: CheckoutOptions = CheckoutOptions()
+    ) throws(GitError) -> MergeAnalysis {
+        try lock.withLock { () throws(GitError) -> MergeAnalysis in
+            try performMerge(
                 annotated: annotated,
                 mergeOptions: mergeOptions,
                 checkoutOptions: checkoutOptions
