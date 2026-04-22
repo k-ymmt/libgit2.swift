@@ -129,7 +129,7 @@ extension Repository {
     ///     until this call returns).
     ///   - mergeOptions / checkoutOptions: forwarded unchanged.
     /// - Returns: the analysis bits describing which dispatch path ran.
-    private func performMerge(
+    internal func performMerge(
         annotated: AnnotatedCommit,
         mergeOptions: MergeOptions,
         checkoutOptions: CheckoutOptions
