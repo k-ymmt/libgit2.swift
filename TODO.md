@@ -4,8 +4,6 @@ Items deferred from the v0.1.0 XCFramework implementation.
 
 ## Out of scope (explicitly excluded from v0.1.0)
 
-- [ ] **SSH support.** Built with `USE_SSH=OFF`; `libssh2` is not included. Cross-compile `libssh2` per slice and either bundle it into the same `libgit2.xcframework` or publish a second XCFramework.
-- [ ] **CI automation.** The build and the GitHub Release upload are manual (`./scripts/build-xcframework.sh` + `./scripts/release-xcframework.sh` + `gh release create`). A workflow that triggers on tag push would remove the manual step.
 - [ ] **Additional Apple platforms.** Mac Catalyst, visionOS, tvOS, watchOS slices.
 - [ ] **iOS test execution.** `swift test` currently runs on macOS only. Verifying the iOS slices on real device / simulator would catch any platform-specific link/runtime issues.
 
@@ -157,6 +155,21 @@ use case appears.
   rebase-style vs merge-style, analysis result exposure, conflict
   surface, auto-commit on `.normal` merge (blocked on the v0.5a-i
   "auto-commit porcelain" deferred item).
+
+## Deferred from v0.5c-ii (pull porcelain)
+
+Non-blocking follow-ups identified while implementing v0.5c-ii. Each is additive and non-breaking, and can be revisited when a concrete use case appears.
+
+- [ ] **Rebase-style pull.** `PullOptions.strategy: .merge | .rebase` is not added. Rebase-style pull composes the `Rebase` step loop (`startRebase` → `next` → `commit` → `finish`); the natural building block is a `rebase(onto:)` auto-continue porcelain (deferred from v0.5a-ii) that does not yet exist. Landing rebase-style pull before that primitive would duplicate the step-loop logic and make later extraction a breaking change to `PullOptions`.
+- [ ] **`pull(options:)` argument-less overload.** Convenience that resolves the remote and branch from HEAD's upstream config (`branch.<current>.remote` / `.merge`). `Reference.upstreamName()` already reduces this to a one-liner at the call site; a first-class overload is additive and lands only if the pattern proves load-bearing.
+- [ ] **Auto-commit on `.normal` merge.** Directly depends on v0.5a-i's "auto-commit porcelain" deferred item; the same single enabling change lifts both restrictions.
+- [ ] **Tag-control pull flag.** `git pull --tags` / `--no-tags` is satisfied by `options.fetch.downloadTags`. A pull-specific flag is redundant; revisit if a concrete use case wants tag control at the pull layer.
+- [ ] **`FETCH_HEAD` line parsing API.** `annotatedCommit(fromFetchHead:…)` requires the caller to supply the OID. Pull bypasses `FETCH_HEAD`-file parsing by reading the updated remote-tracking ref directly. Exposing a Swift value type for the full `FETCH_HEAD` file waits for a non-pull consumer.
+- [ ] **HTTP / SSH-gated integration tests.** v0.5b-i / v0.5b-ii established an env-gated `RemoteGitHubIntegrationTests` pattern. Pull composes fetch + merge, both already covered over HTTP. An HTTP-path pull integration test is a future additive pass.
+- [ ] **Pull-specific concurrency tests.** Pull is fetch + merge; both have concurrency tests already. TSan on the pull path is blocked on the macOS 25.3 / Xcode 26.3 `libclang_rt.tsan_osx_dynamic.dylib` code-signature rejection tracked across v0.5b-i / b-ii.
+- [ ] **`Repository.isHeadDetached` public property.** `Reference.upstreamName()` tests and `Repository.merge(against:)` / `Repository.pull` tests currently use `git_repository_head_detached(repo.handle) == 1` directly via `@testable import Git2`. A thin `public var isHeadDetached: Bool { get throws(GitError) }` would drop the C-API reach-in. Deferred because consumers outside the test target don't need it yet.
+- [ ] **Pull from a local branch with a different name than the remote branch.** The FF path updates the CURRENT branch's target (attached HEAD) or detaches HEAD at the fetched OID (detached HEAD). Pull does not cross-name: it fetches `branchName` on the remote → tracking ref `refs/remotes/<remote>/<branchName>` → merges into the current HEAD's symbolic target (whatever branch HEAD is on). If the local branch name differs from `branchName`, the current branch still advances correctly because the dispatch uses the HEAD-resolved ref, not the AC's ref-name field. Confirm this in an integration test once a concrete cross-name use case appears.
+- [ ] **`pull_unknownBranchOnRemote_throwsAfterFetch` pinning.** Task 8 observed that libgit2 1.9.x's fetch accepts an unknown refspec source silently (updates 0 refs, returns success), and pull's Phase 2 then synthesizes `GitError(.notFound, .reference, "no tracking ref … after fetch")`. If a future libgit2 changes fetch to reject unknown refspecs at the fetch level, this test's assertion drifts. Revisit.
 
 ## Deferred from v0.5b-ii (network — push)
 

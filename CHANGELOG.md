@@ -64,6 +64,10 @@ Versioning follows SemVer with the usual `0.x` caveat: the API is not yet stable
   Reinitializing an existing repository is idempotent: config is
   re-applied, existing objects / refs / HEAD are preserved unless
   `initialBranch` is passed to retarget HEAD.
+- `Repository.pull(remoteNamed:branchNamed:options:) -> MergeAnalysis` — merge-style pull porcelain. Composition of `fetch` + `annotatedCommit(fromFetchHead:)` + `merge(against:)`. `.normal` merges leave `MERGE_HEAD` / index for the caller to commit (auto-commit is a deferred follow-up, see v0.5a-i TODO). `allowNonFastForward: false` refuses `.normal` dispatches with `.nonFastForward` / `.merge`. Fetch and merge phases are not atomic relative to each other — the per-repository lock is released between them.
+- `Repository.PullOptions` — composite of `FetchOptions` + `MergeOptions` + `CheckoutOptions` + `allowNonFastForward: Bool` + `reflogMessage: String?`. Mirrors the `RebaseOptions` composition pattern.
+- `Repository.merge(against: AnnotatedCommit, mergeOptions:, checkoutOptions:) -> MergeAnalysis` — analysis+dispatch entry point sibling to `merge(_: Reference, …)` / `merge(branchNamed:, …)`. Closes the "4 `AnnotatedCommit` creation routes → 3 dispatch routes" asymmetry. Fast-forward dispatch is provenance-based: `AnnotatedCommit` built via `annotatedCommit(for: Reference)` or `annotatedCommit(fromFetchHead:)` advances the current branch (attached HEAD) or stays detached at the new tip (detached HEAD); `AnnotatedCommit` built via `annotatedCommit(for: OID)` always detaches HEAD.
+- `Reference.upstreamName() -> String?` — thin wrapper over `git_branch_upstream_name`. Returns `nil` for non-branches and for local branches without `branch.<name>.remote` + `branch.<name>.merge` config. Lets callers derive pull arguments in one line: `try repo.head().upstreamName()`.
 
 ## [0.2.0] — TBD
 
