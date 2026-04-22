@@ -109,6 +109,10 @@ extension RuntimeSensitiveTests {
                 try repo.setHead(detachedAt: tipOID)
 
                 let head = try repo.head()
+                // libgit2 returns GIT_ERROR + GIT_ERROR_INVALID for
+                // detached HEAD (ref name is "HEAD"), not GIT_ENOTFOUND.
+                // This test pins the empirical branch in
+                // Reference.upstreamName().
                 #expect(try head.upstreamName() == nil)
             }
         }

@@ -95,10 +95,13 @@ public final class Reference: @unchecked Sendable {
     ///
     /// Returns `nil` when:
     /// - the ref is not a local branch (remote-tracking refs, tags,
-    ///   symbolic HEAD when detached),
+    ///   symbolic HEAD when detached) — libgit2 1.9.x signals these via
+    ///   `GIT_ERROR` with class `GIT_ERROR_INVALID`, or (for some
+    ///   malformed ref-name inputs) via `GIT_EINVALID`,
     /// - the local branch has no `branch.<name>.remote` /
-    ///   `branch.<name>.merge` configuration,
-    /// - libgit2 returns `GIT_ENOTFOUND` for any other reason.
+    ///   `branch.<name>.merge` configuration (libgit2 returns
+    ///   `GIT_ENOTFOUND`),
+    /// - libgit2 otherwise returns `GIT_ENOTFOUND`.
     ///
     /// Any other libgit2 error (e.g. a broken config file) propagates
     /// as ``GitError``.
@@ -114,9 +117,16 @@ public final class Reference: @unchecked Sendable {
             if rc == GIT_ENOTFOUND.rawValue || rc == GIT_EINVALID.rawValue {
                 return nil
             }
-            // git_branch_upstream_name returns GIT_ERROR (-1) with class
-            // GIT_ERROR_INVALID when the ref is not a local branch (e.g.
-            // remote-tracking refs, tags, detached HEAD). Treat those as nil.
+            // Empirically observed in libgit2 1.9.x (the XCFramework
+            // currently ships): git_branch_upstream_name returns
+            // GIT_ERROR (-1) with klass == GIT_ERROR_INVALID for
+            // non-local-branch inputs (remote-tracking refs, tags,
+            // detached HEAD). GIT_EINVALID is also returned for some
+            // malformed ref-name inputs. Both are treated as "no
+            // upstream," not errors. A future libgit2 that changes
+            // this signal would surface as a test failure in
+            // ReferenceUpstreamNameTests if the new code falls through
+            // to `check(rc)` below.
             if rc == GIT_ERROR.rawValue,
                let errPtr = git_error_last(),
                errPtr.pointee.klass == Int32(GIT_ERROR_INVALID.rawValue) {
