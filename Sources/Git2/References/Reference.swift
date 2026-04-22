@@ -50,15 +50,21 @@ public final class Reference: @unchecked Sendable {
     public var target: OID {
         get throws(GitError) {
             try repository.lock.withLock { () throws(GitError) -> OID in
-                var resolved: OpaquePointer?
-                try check(git_reference_resolve(&resolved, handle))
-                defer { git_reference_free(resolved) }
-                guard let oidPtr = git_reference_target(resolved) else {
-                    throw GitError(code: .notFound, class: .reference, message: "symbolic reference has no target")
-                }
-                return OID(raw: oidPtr.pointee)
+                try targetLocked()
             }
         }
+    }
+
+    /// No-lock sibling of ``target``. Caller must hold
+    /// `repository.lock`.
+    internal func targetLocked() throws(GitError) -> OID {
+        var resolved: OpaquePointer?
+        try check(git_reference_resolve(&resolved, handle))
+        defer { git_reference_free(resolved) }
+        guard let oidPtr = git_reference_target(resolved) else {
+            throw GitError(code: .notFound, class: .reference, message: "symbolic reference has no target")
+        }
+        return OID(raw: oidPtr.pointee)
     }
 
     /// Resolves this reference to a ``Commit``, peeling through tags if necessary.

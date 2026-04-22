@@ -45,18 +45,26 @@ extension Repository {
         against heads: [AnnotatedCommit]
     ) throws(GitError) -> (analysis: MergeAnalysis, preference: MergePreference) {
         try lock.withLock { () throws(GitError) -> (MergeAnalysis, MergePreference) in
-            var analysisRaw = git_merge_analysis_t(0)
-            var prefRaw = git_merge_preference_t(0)
-            var headPtrs: [OpaquePointer?] = heads.map { $0.handle }
-            let r: Int32 = headPtrs.withUnsafeMutableBufferPointer { buf in
-                git_merge_analysis(&analysisRaw, &prefRaw, handle, buf.baseAddress, buf.count)
-            }
-            try check(r)
-            return (
-                MergeAnalysis(rawValue: analysisRaw.rawValue),
-                MergePreference(prefRaw)
-            )
+            try mergeAnalysisLocked(against: heads)
         }
+    }
+
+    /// No-lock sibling of ``mergeAnalysis(against:)``. Caller must hold
+    /// `lock`.
+    internal func mergeAnalysisLocked(
+        against heads: [AnnotatedCommit]
+    ) throws(GitError) -> (analysis: MergeAnalysis, preference: MergePreference) {
+        var analysisRaw = git_merge_analysis_t(0)
+        var prefRaw = git_merge_preference_t(0)
+        var headPtrs: [OpaquePointer?] = heads.map { $0.handle }
+        let r: Int32 = headPtrs.withUnsafeMutableBufferPointer { buf in
+            git_merge_analysis(&analysisRaw, &prefRaw, handle, buf.baseAddress, buf.count)
+        }
+        try check(r)
+        return (
+            MergeAnalysis(rawValue: analysisRaw.rawValue),
+            MergePreference(prefRaw)
+        )
     }
 }
 

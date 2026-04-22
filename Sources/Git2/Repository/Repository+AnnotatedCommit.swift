@@ -66,16 +66,31 @@ extension Repository {
         oid: OID
     ) throws(GitError) -> AnnotatedCommit {
         try lock.withLock { () throws(GitError) -> AnnotatedCommit in
-            var rawOID = oid.raw
-            var raw: OpaquePointer?
-            try check(git_annotated_commit_from_fetchhead(
-                &raw,
-                handle,
-                branchName,
-                remoteURL,
-                &rawOID
-            ))
-            return AnnotatedCommit(handle: raw!, repository: self)
+            try annotatedCommitLocked(
+                fromFetchHead: branchName,
+                remoteURL: remoteURL,
+                oid: oid
+            )
         }
+    }
+
+    /// No-lock sibling of
+    /// ``annotatedCommit(fromFetchHead:remoteURL:oid:)``. Caller must
+    /// hold `lock`.
+    internal func annotatedCommitLocked(
+        fromFetchHead branchName: String,
+        remoteURL: String,
+        oid: OID
+    ) throws(GitError) -> AnnotatedCommit {
+        var rawOID = oid.raw
+        var raw: OpaquePointer?
+        try check(git_annotated_commit_from_fetchhead(
+            &raw,
+            handle,
+            branchName,
+            remoteURL,
+            &rawOID
+        ))
+        return AnnotatedCommit(handle: raw!, repository: self)
     }
 }

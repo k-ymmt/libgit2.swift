@@ -10,14 +10,19 @@ extension Repository {
     ///   valid. Missing references are reported via `nil`, not a throw.
     public func reference(named name: String) throws(GitError) -> Reference? {
         try lock.withLock { () throws(GitError) -> Reference? in
-            var raw: OpaquePointer?
-            let result = name.withCString { git_reference_lookup(&raw, handle, $0) }
-            if result == GIT_ENOTFOUND.rawValue {
-                return nil
-            }
-            try check(result)
-            return Reference(handle: raw!, repository: self)
+            try referenceLocked(named: name)
         }
+    }
+
+    /// No-lock sibling of ``reference(named:)``. Caller must hold `lock`.
+    internal func referenceLocked(named name: String) throws(GitError) -> Reference? {
+        var raw: OpaquePointer?
+        let result = name.withCString { git_reference_lookup(&raw, handle, $0) }
+        if result == GIT_ENOTFOUND.rawValue {
+            return nil
+        }
+        try check(result)
+        return Reference(handle: raw!, repository: self)
     }
 
     /// A lazy sequence over every reference in this repository.
