@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import Cgit2
+import os
 @testable import Git2
 
 struct RepositoryPullTests {
@@ -221,6 +222,234 @@ struct RepositoryPullTests {
             let localMain = try #require(try repo.reference(named: "refs/heads/main"))
             #expect(try localMain.target == tip)
             #expect(git_repository_head_detached(repo.handle) == 1)
+        }
+    }
+
+    @Test func pull_allowNonFastForwardFalse_onNormal_throws() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let (fx, repo) = try Self.makeSyncedDownstream(in: dir)
+            let sharedTip = fx.seedOIDs.last!
+
+            // Diverge as in pull_normal, but pull with
+            // allowNonFastForward: false.
+            let upRepo = try Repository.open(at: fx.upstreamURL)
+            let upBlob = try upRepo.createBlob(data: Data("up\n".utf8))
+            let upTree = try upRepo.tree(entries: [
+                .init(name: "upstream-only.txt", oid: upBlob, filemode: .blob),
+                .init(name: "README.md", oid: try upRepo.createBlob(data: Data("commit 2\n".utf8)), filemode: .blob),
+            ])
+            let upParent = try upRepo.commit(for: sharedTip)
+            _ = try upRepo.commit(
+                tree: upTree,
+                parents: [upParent],
+                author: Signature(name: "A", email: "a@example.com", date: Date(timeIntervalSince1970: 1700000100), timeZone: TimeZone(identifier: "UTC")!),
+                message: "up",
+                updatingRef: "refs/heads/main"
+            )
+
+            let dnBlob = try repo.createBlob(data: Data("dn\n".utf8))
+            let dnTree = try repo.tree(entries: [
+                .init(name: "downstream-only.txt", oid: dnBlob, filemode: .blob),
+                .init(name: "README.md", oid: try repo.createBlob(data: Data("commit 2\n".utf8)), filemode: .blob),
+            ])
+            let dnParent = try repo.commit(for: sharedTip)
+            _ = try repo.commit(
+                tree: dnTree,
+                parents: [dnParent],
+                author: Signature(name: "B", email: "b@example.com", date: Date(timeIntervalSince1970: 1700000200), timeZone: TimeZone(identifier: "UTC")!),
+                message: "dn",
+                updatingRef: "refs/heads/main"
+            )
+            try repo.checkoutHead(options: .init(strategy: [.force]))
+
+            let headBefore = try repo.head().target
+            let mergeHeadURL = fx.downstreamURL.appendingPathComponent(".git/MERGE_HEAD")
+
+            var options = Repository.PullOptions()
+            options.allowNonFastForward = false
+
+            do {
+                _ = try repo.pull(remoteNamed: "origin", branchNamed: "main", options: options)
+                Issue.record("expected throw")
+            } catch let error as GitError {
+                #expect(error.code == .nonFastForward)
+                #expect(error.class == .merge)
+            }
+
+            #expect(try repo.head().target == headBefore)
+            #expect(!FileManager.default.fileExists(atPath: mergeHeadURL.path))
+            // Tracking ref is updated (fetch completed before refusal).
+            let trackingRef = try #require(try repo.reference(named: "refs/remotes/origin/main"))
+            #expect(try trackingRef.target != headBefore)
+        }
+    }
+
+    @Test func pull_allowNonFastForwardFalse_onFastForward_succeeds() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let (fx, repo) = try Self.makeSyncedDownstream(in: dir)
+            let originalTip = fx.seedOIDs.last!
+
+            let upRepo = try Repository.open(at: fx.upstreamURL)
+            let blob = try upRepo.createBlob(data: Data("ff\n".utf8))
+            let tree = try upRepo.tree(entries: [
+                .init(name: "README.md", oid: blob, filemode: .blob)
+            ])
+            let parentCommit = try upRepo.commit(for: originalTip)
+            let advanced = try upRepo.commit(
+                tree: tree,
+                parents: [parentCommit],
+                author: Signature(name: "A", email: "a@example.com", date: Date(timeIntervalSince1970: 1700000100), timeZone: TimeZone(identifier: "UTC")!),
+                message: "ff",
+                updatingRef: "refs/heads/main"
+            )
+
+            var options = Repository.PullOptions()
+            options.allowNonFastForward = false
+
+            let result = try repo.pull(remoteNamed: "origin", branchNamed: "main", options: options)
+            #expect(result.contains(.fastForward))
+            #expect(try repo.head().target == advanced.oid)
+        }
+    }
+
+    @Test func pull_unknownRemote_throwsNotFound() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let fx = try LocalRemoteFixture.make(in: dir)
+            let repo = try Repository.open(at: fx.downstreamURL)
+            do {
+                _ = try repo.pull(remoteNamed: "ghost", branchNamed: "main")
+                Issue.record("expected throw")
+            } catch let error as GitError {
+                #expect(error.code == .notFound)
+            }
+        }
+    }
+
+    @Test func pull_unknownBranchOnRemote_throwsAfterFetch() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let fx = try LocalRemoteFixture.make(in: dir)
+            let repo = try Repository.open(at: fx.downstreamURL)
+            _ = try repo.createRemote(named: "origin", url: fx.upstreamURLString)
+
+            do {
+                _ = try repo.pull(remoteNamed: "origin", branchNamed: "nosuch")
+                Issue.record("expected throw")
+            } catch let error as GitError {
+                #expect(error.code == .notFound)
+                #expect(error.class == .reference)
+            }
+        }
+    }
+
+    @Test func pull_bareRepo_throws() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let fx = try LocalRemoteFixture.make(in: dir)
+
+            let bareDir = dir.appendingPathComponent("downstream-bare")
+            let bareRepo = try Repository.create(at: bareDir, bare: true)
+            _ = try bareRepo.createRemote(named: "origin", url: fx.upstreamURLString)
+
+            try bareRepo.fetch(remoteNamed: "origin")
+            let tipCommit = try bareRepo.commit(for: fx.seedOIDs.last!)
+            _ = try bareRepo.createBranch(named: "main", at: tipCommit, force: false)
+            try bareRepo.setHead(referenceName: "refs/heads/main")
+
+            // Advance upstream and pull; FF checkout will be rejected on bare.
+            let upRepo = try Repository.open(at: fx.upstreamURL)
+            let blob = try upRepo.createBlob(data: Data("bump\n".utf8))
+            let tree = try upRepo.tree(entries: [
+                .init(name: "README.md", oid: blob, filemode: .blob)
+            ])
+            let parentCommit = try upRepo.commit(for: fx.seedOIDs.last!)
+            _ = try upRepo.commit(
+                tree: tree,
+                parents: [parentCommit],
+                author: Signature(name: "A", email: "a@example.com", date: Date(timeIntervalSince1970: 1700000100), timeZone: TimeZone(identifier: "UTC")!),
+                message: "ff",
+                updatingRef: "refs/heads/main"
+            )
+
+            do {
+                _ = try bareRepo.pull(remoteNamed: "origin", branchNamed: "main")
+                Issue.record("expected throw on bare FF checkout")
+            } catch let error as GitError {
+                #expect(error.code == .bareRepo)
+                #expect(error.class == .repository)
+            }
+        }
+    }
+
+    @Test func pull_invokesFetchCallbacks() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let (fx, repo) = try Self.makeSyncedDownstream(in: dir)
+
+            // Advance upstream so the fetch has something to transfer.
+            let upRepo = try Repository.open(at: fx.upstreamURL)
+            let blob = try upRepo.createBlob(data: Data("payload\n".utf8))
+            let tree = try upRepo.tree(entries: [
+                .init(name: "README.md", oid: blob, filemode: .blob)
+            ])
+            let parentCommit = try upRepo.commit(for: fx.seedOIDs.last!)
+            _ = try upRepo.commit(
+                tree: tree,
+                parents: [parentCommit],
+                author: Signature(name: "A", email: "a@example.com", date: Date(timeIntervalSince1970: 1700000100), timeZone: TimeZone(identifier: "UTC")!),
+                message: "payload",
+                updatingRef: "refs/heads/main"
+            )
+
+            let progressCount = OSAllocatedUnfairLock(initialState: 0)
+            var options = Repository.PullOptions()
+            options.fetch.transferProgress = { _ in
+                progressCount.withLock { $0 += 1 }
+                return true
+            }
+
+            _ = try repo.pull(remoteNamed: "origin", branchNamed: "main", options: options)
+
+            #expect(progressCount.withLock { $0 } > 0)
+            // Note: certificateCheck and credentials callbacks do not
+            // fire over file:// (libgit2's local transport skips them).
+            // Covered by v0.5b-i's RemoteCallbackTests for HTTPS paths.
+        }
+    }
+
+    @Test func pull_propagatesReflogMessage() throws {
+        try Git.bootstrap(); defer { try? Git.shutdown() }
+        try withTemporaryDirectory { dir in
+            let (fx, repo) = try Self.makeSyncedDownstream(in: dir)
+
+            // Advance upstream so the tracking ref's reflog gets a new entry.
+            let upRepo = try Repository.open(at: fx.upstreamURL)
+            let blob = try upRepo.createBlob(data: Data("msg\n".utf8))
+            let tree = try upRepo.tree(entries: [
+                .init(name: "README.md", oid: blob, filemode: .blob)
+            ])
+            let parentCommit = try upRepo.commit(for: fx.seedOIDs.last!)
+            _ = try upRepo.commit(
+                tree: tree,
+                parents: [parentCommit],
+                author: Signature(name: "A", email: "a@example.com", date: Date(timeIntervalSince1970: 1700000100), timeZone: TimeZone(identifier: "UTC")!),
+                message: "msg",
+                updatingRef: "refs/heads/main"
+            )
+
+            var options = Repository.PullOptions()
+            options.reflogMessage = "pull"
+
+            _ = try repo.pull(remoteNamed: "origin", branchNamed: "main", options: options)
+
+            let reflogURL = fx.downstreamURL
+                .appendingPathComponent(".git/logs/refs/remotes/origin/main")
+            let reflogContents = try String(contentsOf: reflogURL, encoding: .utf8)
+            let lastLine = reflogContents.split(separator: "\n").last.map(String.init) ?? ""
+            #expect(lastLine.contains("\tpull"))
         }
     }
 }

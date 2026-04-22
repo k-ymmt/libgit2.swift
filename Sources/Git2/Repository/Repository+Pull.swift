@@ -65,6 +65,20 @@ extension Repository {
                 oid: oid
             )
 
+            if !options.allowNonFastForward {
+                let (analysis, _) = try mergeAnalysisLocked(against: [annotated])
+                let ffOrTrivial =
+                    analysis.contains(.fastForward)
+                    || analysis.contains(.upToDate)
+                    || analysis.contains(.unborn)
+                if analysis.contains(.normal) && !ffOrTrivial {
+                    throw GitError(
+                        code: .nonFastForward, class: .merge,
+                        message: "pull would require non-fast-forward merge"
+                    )
+                }
+            }
+
             return try performMerge(
                 annotated: annotated,
                 mergeOptions: options.merge,
