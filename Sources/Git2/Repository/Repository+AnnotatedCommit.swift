@@ -8,10 +8,18 @@ extension Repository {
         for reference: Reference
     ) throws(GitError) -> AnnotatedCommit {
         try lock.withLock { () throws(GitError) -> AnnotatedCommit in
-            var out: OpaquePointer?
-            try check(git_annotated_commit_from_ref(&out, handle, reference.handle))
-            return AnnotatedCommit(handle: out!, repository: self)
+            try annotatedCommitLocked(for: reference)
         }
+    }
+
+    /// No-lock sibling of ``annotatedCommit(for:)-Reference``. Caller must
+    /// hold `lock`.
+    internal func annotatedCommitLocked(
+        for reference: Reference
+    ) throws(GitError) -> AnnotatedCommit {
+        var out: OpaquePointer?
+        try check(git_annotated_commit_from_ref(&out, handle, reference.handle))
+        return AnnotatedCommit(handle: out!, repository: self)
     }
 
     /// Wraps `git_annotated_commit_lookup`. The resulting handle has no ref
