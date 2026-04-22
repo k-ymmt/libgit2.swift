@@ -88,4 +88,43 @@ public final class Reference: @unchecked Sendable {
             try check(git_reference_delete(handle))
         }
     }
+
+    /// Resolves this local branch's upstream tracking ref name
+    /// (e.g. `"refs/remotes/origin/main"`). Thin wrapper over
+    /// `git_branch_upstream_name`.
+    ///
+    /// Returns `nil` when:
+    /// - the ref is not a local branch (remote-tracking refs, tags,
+    ///   symbolic HEAD when detached),
+    /// - the local branch has no `branch.<name>.remote` /
+    ///   `branch.<name>.merge` configuration,
+    /// - libgit2 returns `GIT_ENOTFOUND` for any other reason.
+    ///
+    /// Any other libgit2 error (e.g. a broken config file) propagates
+    /// as ``GitError``.
+    public func upstreamName() throws(GitError) -> String? {
+        try repository.lock.withLock { () throws(GitError) -> String? in
+            var buf = git_buf()
+            defer { git_buf_dispose(&buf) }
+            // Read ref name without re-entering the lock via
+            // Reference.name (which would deadlock on the non-recursive
+            // OSAllocatedUnfairLock).
+            let namePtr = git_reference_name(handle)!
+            let rc = git_branch_upstream_name(&buf, repository.handle, namePtr)
+            if rc == GIT_ENOTFOUND.rawValue || rc == GIT_EINVALID.rawValue {
+                return nil
+            }
+            // git_branch_upstream_name returns GIT_ERROR (-1) with class
+            // GIT_ERROR_INVALID when the ref is not a local branch (e.g.
+            // remote-tracking refs, tags, detached HEAD). Treat those as nil.
+            if rc == GIT_ERROR.rawValue,
+               let errPtr = git_error_last(),
+               errPtr.pointee.klass == Int32(GIT_ERROR_INVALID.rawValue) {
+                return nil
+            }
+            try check(rc)
+            guard let ptr = buf.ptr else { return nil }
+            return String(cString: ptr)
+        }
+    }
 }
