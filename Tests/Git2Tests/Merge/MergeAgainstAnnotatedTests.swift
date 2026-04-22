@@ -66,6 +66,9 @@ extension RuntimeSensitiveTests {
                 let result = try repo.merge(against: annotated)
                 #expect(result.contains(.fastForward))
                 #expect(try repo.head().target == aheadOID)
+                // No Swift wrapper for head_detached yet (tracked in v0.5c-ii TODO).
+                // Safe here: merge() has returned (its own lock released), and
+                // @Suite(.serialized) prevents overlapping tests.
                 #expect(git_repository_head_detached(repo.handle) == 1)
             }
         }
@@ -94,7 +97,7 @@ extension RuntimeSensitiveTests {
         }
 
         @Test
-        func mergeAgainst_fromFetchHead_reflogsFetchHeadProvenance() throws {
+        func mergeAgainst_fromFetchHead_onUnbornHead_attachesCurrentBranch() throws {
             try Git.bootstrap()
             defer { try? Git.shutdown() }
 

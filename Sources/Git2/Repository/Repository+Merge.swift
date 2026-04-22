@@ -178,13 +178,16 @@ extension Repository {
             // update HEAD's ref (attached) or move detached HEAD. Mirrors
             // libgit2's examples/merge.c pattern.
             //
-            // Dispatch strategy:
-            // • If the annotated commit carries ref provenance (created from a
-            //   Reference), update the current branch's target so HEAD stays
-            //   attached and the symbolic ref advances with the fast-forward.
-            // • If there is no ref provenance (OID-only lookup, FETCH_HEAD
-            //   origin, etc.), use set_head_detached_from_annotated so that
-            //   the reflog records the provenance correctly and HEAD detaches.
+            // Dispatch strategy, based on git_annotated_commit_ref == NULL:
+            // • Ref provenance (from_ref OR from_fetchhead — both store a
+            //   ref_name, so git_annotated_commit_ref is non-NULL):
+            //     - Attached HEAD  → git_reference_set_target advances the
+            //       current branch; HEAD stays attached.
+            //     - Detached HEAD  → set_head_detached_from_annotated keeps
+            //       HEAD detached at the new tip.
+            // • No ref provenance (from_lookup — OID only): always
+            //   set_head_detached_from_annotated, so HEAD detaches regardless
+            //   of its prior state.
             let oidPtr = git_annotated_commit_id(annotated.handle)!
             var commitPtr: OpaquePointer?
             try check(git_object_lookup(&commitPtr, handle, oidPtr, GIT_OBJECT_COMMIT))
@@ -287,19 +290,39 @@ extension Repository {
     }
 
     /// Porcelain merge against a pre-built ``AnnotatedCommit``. Analyzes
-    /// the merge, then dispatches on the analysis bits the same way as
-    /// ``merge(_:mergeOptions:checkoutOptions:)-Reference``. Closes the
-    /// surface gap where ``AnnotatedCommit`` was the only merge input
-    /// that could not drive analysis + dispatch.
+    /// the merge and dispatches on the analysis bits. Closes the surface
+    /// gap where ``AnnotatedCommit`` was the only merge input that could
+    /// not drive analysis + dispatch.
     ///
-    /// The entire analysis → dispatch sequence runs inside a single lock
-    /// section — no other task observes a mid-merge state.
+    /// Dispatch paths:
+    /// - ``MergeAnalysis/upToDate`` — no-op
+    /// - ``MergeAnalysis/unborn`` — create the branch HEAD points at
+    ///   (HEAD's symbolic target) at the fetched OID, attach HEAD,
+    ///   checkout
+    /// - ``MergeAnalysis/fastForward`` — provenance-based (see below)
+    /// - ``MergeAnalysis/normal`` — call `git_merge` (conflicts land in
+    ///   the index; state becomes ``State/merge``)
+    ///
+    /// Fast-forward dispatch depends on the ``AnnotatedCommit``'s ref
+    /// provenance:
+    /// - If the AC was built from a ``Reference`` (via
+    ///   ``annotatedCommit(for:)-Reference``) or from `FETCH_HEAD` (via
+    ///   ``annotatedCommit(fromFetchHead:remoteURL:oid:)``), it carries
+    ///   a ref name. Attached HEAD keeps the current branch attached
+    ///   and advances its target; detached HEAD stays detached at the
+    ///   new tip with `FETCH_HEAD`-style reflog provenance.
+    /// - If the AC was built from an OID alone (via
+    ///   ``annotatedCommit(for:)-OID`` / ``annotatedCommit(from:)``), it
+    ///   has no ref provenance. Fast-forward always detaches HEAD at
+    ///   the new tip — even if HEAD was attached beforehand. Call
+    ///   ``merge(_:mergeOptions:checkoutOptions:)-Reference`` instead
+    ///   if you want the current branch to advance.
+    ///
+    /// The entire analysis → dispatch sequence runs inside a single
+    /// lock section — no other task observes a mid-merge state.
     ///
     /// - Parameters:
-    ///   - annotated: The merge target. Typically produced by
-    ///     ``annotatedCommit(for:)-Reference``,
-    ///     ``annotatedCommit(for:)-OID``, ``annotatedCommit(from:)``, or
-    ///     ``annotatedCommit(fromFetchHead:remoteURL:oid:)``.
+    ///   - annotated: The merge target.
     ///   - mergeOptions: Merge rename / favor / recursion options.
     ///   - checkoutOptions: Checkout options applied on the
     ///     `.fastForward`, `.unborn`, and `.normal` dispatch paths.
