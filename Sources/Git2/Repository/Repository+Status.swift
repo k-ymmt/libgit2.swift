@@ -65,4 +65,31 @@ extension Repository {
             return StatusFlags(rawValue: try result.get())
         }
     }
+
+    /// Whether `.gitignore` and related rules would ignore `path`.
+    ///
+    /// Consults ignore rules only — a tracked file matching a gitignore
+    /// rule still returns `true`. See ``StatusFlags/ignored`` on an
+    /// individual ``StatusEntry`` for the combined (tracking-aware)
+    /// verdict.
+    ///
+    /// - Throws: ``GitError`` — in practice `git_status_should_ignore`
+    ///   returns `0` or `1` for any input, so this call is effectively
+    ///   infallible.
+    public func shouldIgnore(path: String) throws(GitError) -> Bool {
+        try lock.withLock { () throws(GitError) -> Bool in
+            var ignored: Int32 = 0
+            let result: Result<Bool, GitError> = path.withCString { cpath in
+                do {
+                    try check(git_status_should_ignore(&ignored, handle, cpath))
+                    return .success(ignored != 0)
+                } catch let error as GitError {
+                    return .failure(error)
+                } catch {
+                    fatalError("unreachable: typed throws guarantees GitError")
+                }
+            }
+            return try result.get()
+        }
+    }
 }
