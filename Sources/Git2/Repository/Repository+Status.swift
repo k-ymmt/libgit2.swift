@@ -19,4 +19,19 @@ extension Repository {
             }
         }
     }
+
+    /// Returns a snapshot of every file matching `options`.
+    ///
+    /// Internally: `statusList(options:)` → materialize via `count` +
+    /// `subscript(_:)` → drop the list (freeing the libgit2 handle) before
+    /// returning.
+    ///
+    /// - Throws: ``GitError`` — notably ``GitError/Code/bareRepo`` on a bare
+    ///   repository.
+    public func statusEntries(
+        options: Repository.StatusOptions = Repository.StatusOptions()
+    ) throws(GitError) -> [StatusEntry] {
+        let list = try statusList(options: options)
+        return (0..<list.count).map { list[$0] }
+    }
 }
