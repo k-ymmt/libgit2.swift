@@ -171,6 +171,66 @@ Non-blocking follow-ups identified while implementing v0.5c-ii. Each is additive
 - [ ] **Pull from a local branch with a different name than the remote branch.** The FF path updates the CURRENT branch's target (attached HEAD) or detaches HEAD at the fetched OID (detached HEAD). Pull does not cross-name: it fetches `branchName` on the remote → tracking ref `refs/remotes/<remote>/<branchName>` → merges into the current HEAD's symbolic target (whatever branch HEAD is on). If the local branch name differs from `branchName`, the current branch still advances correctly because the dispatch uses the HEAD-resolved ref, not the AC's ref-name field. Confirm this in an integration test once a concrete cross-name use case appears.
 - [ ] **`pull_unknownBranchOnRemote_throwsAfterFetch` pinning.** Task 8 observed that libgit2 1.9.x's fetch accepts an unknown refspec source silently (updates 0 refs, returns success), and pull's Phase 2 then synthesizes `GitError(.notFound, .reference, "no tracking ref … after fetch")`. If a future libgit2 changes fetch to reject unknown refspecs at the fetch level, this test's assertion drifts. Revisit.
 
+## Deferred from v0.6 (status slice)
+
+Non-blocking follow-ups identified while implementing v0.6. Each is
+additive and non-breaking, and can be revisited when a concrete use
+case appears.
+
+- [ ] **`forEachStatus(options:) { ... }` callback-form API**
+  (`git_status_foreach` / `_foreach_ext`). v0.6 ships snapshot + handle
+  shapes. Land with the unified checkout / merge / rebase / status
+  callback-bridging slice.
+- [ ] **`Repository.StatusOptions` presets** (`.porcelain`,
+  `.gitStatusCliDefaults`, etc.). `Repository.StatusOptions(flags: .defaults)`
+  hits the common case; add presets when a repeated call-site pattern
+  justifies them.
+- [ ] **`StatusList: Sequence` conformance.** Mirror of the
+  `Diff: Sequence` deferral. Land once a caller wants
+  `for entry in list`.
+- [ ] **Submodule-aware status coverage.** v0.6 tests the
+  `excludeSubmodules` flag via raw-value pinning only; comprehensive
+  `SUBMODULE_NEW` / dirty-submodule coverage lands with a submodule
+  slice.
+- [ ] **`IndexStatus` / `WorkdirStatus` split enums.** Alternative
+  shape to the single `StatusFlags` `OptionSet`. Revisit if call sites
+  repeatedly spelunk the flags in ways the convenience properties
+  don't capture.
+- [ ] **`StatusEntry.pathBytes: [UInt8]`.** Raw-byte path accessor for
+  non-UTF-8 filenames. `StatusEntry.path` is UTF-8 `String` today;
+  non-UTF-8 bytes get replacement characters. Add when a caller needs
+  byte-exact round-trip.
+- [ ] **`StatusList.close()` consuming method.** Mirror of the generic
+  handle-class ergonomic deferral (same question across `Diff`,
+  `Rebase`, `StatusList`).
+- [ ] **Linked-worktree status.** Worktree slice is not landed. Status
+  in a linked worktree works via `Repository.open(at: worktreePath)`
+  today; a first-class worktree-aware API lands with that slice.
+- [ ] **Rename detection in `status(forPath:)`.** libgit2's
+  `git_status_file` explicitly does not do rename detection. Callers
+  who need renames use `statusEntries(options:)` with
+  `renamesHeadToIndex` / `renamesIndexToWorkdir`. Add a
+  "filter snapshot by path" helper if repeated call sites appear.
+- [ ] **`StatusFlags.description` / `CustomStringConvertible`** for
+  debug pretty-printing.
+- [ ] **Concurrency tests' `try?` softening on `status(forPath:)`.**
+  `RepositoryStatusConcurrencyTests.statusList_subscript_andStatusForPath_runConcurrently`
+  uses `_ = try? repo.status(forPath: "a.txt")` to allow the status
+  call to swallow unexpected errors silently. Tightening to `try`
+  would surface race-induced errors — change when TSan is unblocked
+  and the smoke test can be upgraded to a race-detecting test.
+- [ ] **Error-code specificity horizontal pass.** v0.6 tests assert
+  `code` and the libgit2-consistent `class` where known. Cross-slice
+  tightening (message pinning, class where libgit2 varies) waits for
+  the tracked horizontal pass (see v0.3 / v0.4a / v0.4b-i / v0.4b-ii /
+  v0.5a-i / v0.5c-ii follow-ups).
+- [ ] **SHA-256 repository status.** Gated on
+  `EXPERIMENTAL_SHA256=ON`.
+- [ ] **TSan on the status path.** Blocked on the cross-slice macOS
+  25.3 / Xcode 26.3 `libclang_rt.tsan_osx_dynamic.dylib` code-signature
+  rejection. `RepositoryStatusConcurrencyTests` validates serialization
+  under normal execution.
+
 ## Deferred from v0.5b-ii (network — push)
 
 Non-blocking follow-ups identified while implementing v0.5b-ii. Each is additive and non-breaking, and can be revisited when a concrete use case appears.

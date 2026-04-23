@@ -7,6 +7,39 @@ Versioning follows SemVer with the usual `0.x` caveat: the API is not yet stable
 
 ## [Unreleased]
 
+### Added — v0.6 (status slice)
+
+- `Repository.statusEntries(options:) -> [StatusEntry]` — snapshot of
+  working-tree / index / HEAD status.
+- `Repository.statusList(options:) -> StatusList` — live handle with
+  `count` + `subscript(Int)`.
+- `Repository.status(forPath:) -> StatusFlags` — single exact-path
+  query. Throws `.notFound` / `.ambiguous` / `.bareRepo` per libgit2.
+- `Repository.shouldIgnore(path:) -> Bool` — gitignore-rule predicate.
+- `StatusEntry` value type (path + flags + `headToIndex` /
+  `indexToWorkdir` `DiffDelta?` pair).
+- `StatusFlags: OptionSet` mirroring `git_status_t`, with convenience
+  properties (`hasIndexChanges`, `hasWorkdirChanges`, `isConflicted`,
+  `isIgnored`, `isCurrent`).
+- `Repository.StatusOptions` value type with `Show` enum (`indexAndWorkdir` /
+  `indexOnly` / `workdirOnly`), `Flags: OptionSet` (16 flags,
+  `.defaults` matching `GIT_STATUS_OPT_DEFAULTS`), `pathspec`,
+  `baseline`, and `renameThreshold`.
+- `StatusList` handle class — `@unchecked Sendable`, lock-gated reads,
+  `git_status_list_free` on `deinit`.
+
+### Tests — v0.6
+
+- `Tests/Git2Tests/Status/StatusFlagsTests.swift`
+- `Tests/Git2Tests/Status/StatusOptionsTests.swift`
+- `Tests/Git2Tests/Status/StatusEntryTests.swift`
+- `Tests/Git2Tests/Status/StatusEntriesTests.swift`
+- `Tests/Git2Tests/Status/StatusListTests.swift`
+- `Tests/Git2Tests/Status/StatusForPathTests.swift`
+- `Tests/Git2Tests/Status/ShouldIgnoreTests.swift`
+- `Tests/Git2Tests/Status/RepositoryStatusConcurrencyTests.swift`
+- `Tests/Git2Tests/Support/TestFixture+Status.swift` (fixture helpers)
+
 ### Added
 
 - `Repository.CheckoutOptions` + `Strategy` (`OptionSet`) — strategy flags mirroring `git_checkout_strategy_t`, plus `paths` pathspec list.
