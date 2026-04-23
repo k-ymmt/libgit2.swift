@@ -484,5 +484,53 @@ extension RuntimeSensitiveTests {
                 #expect(entries.contains { $0.path == "x.txt" })
             }
         }
+
+        @Test
+        func statusEntries_conflictedFile_appearsAsConflicted() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+            try withTemporaryDirectory { dir in
+                // makeConflictingBranches (from TestFixture+Merge.swift) returns a
+                // repo where HEAD is on "ours" and refs/heads/theirs has a
+                // conflicting commit. Triggering the merge leaves the index with
+                // conflict entries that git_status_list should surface as
+                // .conflicted.
+                let made = try TestFixture.makeConflictingBranches(in: dir)
+                let repo = try Repository.open(at: made.fixture.repositoryURL)
+                let theirs = try repo.annotatedCommit(for: made.theirsOID)
+                _ = try repo.merge(against: theirs)
+
+                let entries = try repo.statusEntries()
+                #expect(entries.contains { $0.flags.contains(.conflicted) })
+            }
+        }
+
+        @Test
+        func statusEntries_renamesHeadToIndex_detectsStagedRename() throws {
+            try Git.bootstrap()
+            defer { try? Git.shutdown() }
+            try withTemporaryDirectory { dir in
+                let repo = try TestFixture.makeSingleFileRepo(
+                    path: "old.txt",
+                    contents: String(repeating: "body\n", count: 200),
+                    in: dir
+                )
+                // Stage a full rename via index mutations.
+                try TestFixture.deleteWorkdirFile("old.txt", in: dir)
+                try TestFixture.writeWorkdirFile(
+                    "new.txt",
+                    contents: String(repeating: "body\n", count: 200),
+                    in: dir
+                )
+                let index = try repo.index()
+                try index.removePath("old.txt")
+                try index.addPath("new.txt")
+                try index.save()
+
+                let opts = Repository.StatusOptions(flags: [.renamesHeadToIndex])
+                let entries = try repo.statusEntries(options: opts)
+                #expect(entries.contains { $0.flags.contains(.indexRenamed) })
+            }
+        }
     }
 }
